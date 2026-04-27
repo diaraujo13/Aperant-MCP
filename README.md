@@ -6,11 +6,11 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/AndyMik90/Auto-Claude/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/AndyMik90/Auto-Claude/actions)
 [![Mentioned in Awesome Claude Code](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/hesreallyhim/awesome-claude-code)
 
+## Check a quick video demo of some of my implementations (and Aperant's MCP most importantly) https://www.youtube.com/watch?v=NHAm-M8Lawc
+
 # The dev-next and develop branches are currently the same. On develop, I need to add back the edited original root repo README, which had an extra Quick Start entry with the MCP and watchdog instructions README hyperlink. Main has my features implemented, too.
 
 ## **To get the 'Master LLM' working properly through the MCP, either with RDR or general MCP usage, you'll need to copy the folders inside the skills folder in .claude to your personal \.claude\skills folder.**
-
-## Check a quick video demo of some of my implementations (and Aperant's MCP most importantly) https://www.youtube.com/watch?v=NHAm-M8Lawc
 
 Fork of [Aperant](https://github.com/AndyMik90/Auto-Claude) with a custom MCP system, automatic recovery, and infrastructure for autonomous overnight batch runs. I added **22,000+ lines** across 114 files on top of main.
 
