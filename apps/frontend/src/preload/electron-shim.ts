@@ -156,9 +156,27 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     },
   };
 
+  // Claude Code domain (Phase 2 round 2) — CLI detection, version checks,
+  // install command generation, active-path persistence to settings.json.
+  const claudeCodeAPI = {
+    checkClaudeCodeVersion: () =>
+      safeInvoke<unknown>('claude_code_check_version'),
+    installClaudeCode: () =>
+      safeInvoke<unknown>('claude_code_install'),
+    getClaudeCodeVersions: () =>
+      safeInvoke<unknown>('claude_code_get_versions'),
+    installClaudeCodeVersion: (version: string) =>
+      safeInvoke<unknown>('claude_code_install_version', { version }),
+    getClaudeCodeInstallations: () =>
+      safeInvoke<unknown>('claude_code_get_installations'),
+    setClaudeCodeActivePath: (cliPath: string) =>
+      safeInvoke<unknown>('claude_code_set_active_path', { cliPath }),
+  };
+
   const implemented: Record<string, unknown> = {
     ...desktopAPI,
     ...settingsAPI,
+    ...claudeCodeAPI,
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {
         // Phase 1 spike: activity_record handler not ported yet. Swallow.

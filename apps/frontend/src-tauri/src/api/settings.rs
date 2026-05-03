@@ -14,7 +14,7 @@ const APP_NAME: &str = "auto-claude-ui";
 /// - macOS:   ~/Library/Application Support/auto-claude-ui/settings.json
 /// - Windows: %APPDATA%\auto-claude-ui\settings.json
 /// - Linux:   ~/.config/auto-claude-ui/settings.json
-fn settings_path() -> AppResult<PathBuf> {
+pub(crate) fn settings_path() -> AppResult<PathBuf> {
     let base = dirs::config_dir().ok_or_else(|| {
         AppError::new(
             "no_config_dir",
@@ -24,7 +24,7 @@ fn settings_path() -> AppResult<PathBuf> {
     Ok(base.join(APP_NAME).join("settings.json"))
 }
 
-fn read_settings_at(path: &Path) -> Value {
+pub(crate) fn read_settings_at(path: &Path) -> Value {
     if !path.exists() {
         return Value::Object(Default::default());
     }
@@ -41,7 +41,7 @@ fn read_settings_at(path: &Path) -> Value {
     })
 }
 
-fn write_settings_at(path: &Path, settings: &Value) -> AppResult<()> {
+pub(crate) fn write_settings_at(path: &Path, settings: &Value) -> AppResult<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| AppError::new("create_dir_failed", e.to_string()))?;
@@ -52,7 +52,7 @@ fn write_settings_at(path: &Path, settings: &Value) -> AppResult<()> {
     Ok(())
 }
 
-fn shallow_merge(base: &mut Value, patch: Value) {
+pub(crate) fn shallow_merge(base: &mut Value, patch: Value) {
     if let (Value::Object(b), Value::Object(p)) = (base, patch) {
         for (k, v) in p {
             b.insert(k, v);

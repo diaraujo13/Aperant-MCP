@@ -43,6 +43,13 @@ fn main() {
             api::settings::provider_accounts_get,
             api::settings::spellcheck_set_languages,
             api::settings::autobuild_source_env_get,
+            // Claude Code domain (Phase 2 round 2)
+            api::claude_code::claude_code_check_version,
+            api::claude_code::claude_code_get_installations,
+            api::claude_code::claude_code_get_versions,
+            api::claude_code::claude_code_install,
+            api::claude_code::claude_code_install_version,
+            api::claude_code::claude_code_set_active_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
