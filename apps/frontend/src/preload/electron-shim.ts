@@ -200,11 +200,41 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<null>('kanban_preferences_save', { projectId, preferences }),
   };
 
+  // File explorer + screenshot + debug + diagnostics (Phase 2 round 4 light).
+  // file_* are real (list/read with 10MB cap and dir-first sort).
+  // screenshot/debug-clipboard/all of diagnostics are sensible stubs that
+  // keep the renderer from crashing on subsystem calls that aren't ported yet.
+  const fileAndDebugAPI = {
+    listDirectory: (dirPath: string) =>
+      safeInvoke<unknown[]>('file_explorer_list', { dirPath }),
+    readFile: (filePath: string) =>
+      safeInvoke<string>('file_explorer_read', { filePath }),
+    getSources: () => invoke('screenshot_get_sources'),
+    capture: (options: unknown) =>
+      invoke('screenshot_capture', { options }),
+    getDebugInfo: () => invoke('debug_get_info'),
+    openLogsFolder: () => invoke('debug_open_logs_folder'),
+    copyDebugInfo: () => invoke('debug_copy_debug_info'),
+    getRecentErrors: (maxCount?: number) =>
+      invoke('debug_get_recent_errors', { maxCount }),
+    listLogFiles: () => invoke('debug_list_log_files'),
+    triggerCrash: () => invoke('debug_trigger_crash'),
+    getUsageState: () =>
+      safeInvoke<unknown>('diag_get_usage_state'),
+    getRdrState: () =>
+      safeInvoke<unknown>('diag_get_rdr_state'),
+    forceUsageFetch: () =>
+      safeInvoke<unknown>('diag_force_usage_fetch'),
+    sendTestRdr: () =>
+      safeInvoke<unknown>('diag_send_test_rdr'),
+  };
+
   const implemented: Record<string, unknown> = {
     ...desktopAPI,
     ...settingsAPI,
     ...claudeCodeAPI,
     ...projectAPI,
+    ...fileAndDebugAPI,
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {
         // Phase 1 spike: activity_record handler not ported yet. Swallow.

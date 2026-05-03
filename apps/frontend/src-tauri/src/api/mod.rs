@@ -1,4 +1,8 @@
 pub mod claude_code;
+pub mod debug;
 pub mod desktop;
+pub mod diagnostics;
+pub mod file;
 pub mod project;
+pub mod screenshot;
 pub mod settings;

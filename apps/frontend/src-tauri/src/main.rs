@@ -61,6 +61,21 @@ fn main() {
             api::project::tab_state_save,
             api::project::kanban_preferences_get,
             api::project::kanban_preferences_save,
+            // File explorer + screenshot + debug + diagnostics (Phase 2 round 4 light)
+            api::file::file_explorer_list,
+            api::file::file_explorer_read,
+            api::screenshot::screenshot_get_sources,
+            api::screenshot::screenshot_capture,
+            api::debug::debug_get_info,
+            api::debug::debug_open_logs_folder,
+            api::debug::debug_copy_debug_info,
+            api::debug::debug_get_recent_errors,
+            api::debug::debug_list_log_files,
+            api::debug::debug_trigger_crash,
+            api::diagnostics::diag_get_usage_state,
+            api::diagnostics::diag_get_rdr_state,
+            api::diagnostics::diag_force_usage_fetch,
+            api::diagnostics::diag_send_test_rdr,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
