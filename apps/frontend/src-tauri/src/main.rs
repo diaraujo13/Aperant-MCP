@@ -50,6 +50,17 @@ fn main() {
             api::claude_code::claude_code_install,
             api::claude_code::claude_code_install_version,
             api::claude_code::claude_code_set_active_path,
+            // Project domain (Phase 2 round 3)
+            api::project::project_list,
+            api::project::project_add,
+            api::project::project_remove,
+            api::project::project_update_settings,
+            api::project::project_set_auto_resume_after_rate_limit,
+            api::project::project_set_rdr_enabled,
+            api::project::tab_state_get,
+            api::project::tab_state_save,
+            api::project::kanban_preferences_get,
+            api::project::kanban_preferences_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

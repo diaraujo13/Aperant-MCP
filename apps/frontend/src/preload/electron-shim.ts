@@ -173,10 +173,38 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<unknown>('claude_code_set_active_path', { cliPath }),
   };
 
+  // Project domain (Phase 2 round 3) — projects.json CRUD, tab state, kanban prefs.
+  // Reads/writes the SAME file the Electron build uses (<userData>/store/projects.json)
+  // so projects added in Electron show up immediately in Tauri and vice versa.
+  const projectAPI = {
+    getProjects: () => safeInvoke<unknown[]>('project_list'),
+    addProject: (projectPath: string) =>
+      safeInvoke<unknown>('project_add', { projectPath }),
+    removeProject: (projectId: string) =>
+      safeInvoke<null>('project_remove', { projectId }),
+    updateProjectSettings: (projectId: string, settings: Record<string, unknown>) =>
+      safeInvoke<null>('project_update_settings', { projectId, settings }),
+    setAutoResumeAfterRateLimit: (projectId: string, enabled: boolean) =>
+      safeInvoke<unknown>('project_set_auto_resume_after_rate_limit', {
+        projectId,
+        enabled,
+      }),
+    setRdrEnabled: (projectId: string, enabled: boolean) =>
+      safeInvoke<unknown>('project_set_rdr_enabled', { projectId, enabled }),
+    getTabState: () => safeInvoke<unknown>('tab_state_get'),
+    saveTabState: (tabState: unknown) =>
+      safeInvoke<null>('tab_state_save', { tabState }),
+    getKanbanPreferences: (projectId: string) =>
+      safeInvoke<unknown>('kanban_preferences_get', { projectId }),
+    saveKanbanPreferences: (projectId: string, preferences: unknown) =>
+      safeInvoke<null>('kanban_preferences_save', { projectId, preferences }),
+  };
+
   const implemented: Record<string, unknown> = {
     ...desktopAPI,
     ...settingsAPI,
     ...claudeCodeAPI,
+    ...projectAPI,
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {
         // Phase 1 spike: activity_record handler not ported yet. Swallow.
