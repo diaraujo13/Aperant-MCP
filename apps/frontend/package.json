@@ -50,7 +50,12 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:tauri-renderer": "vite --config vite.tauri.config.ts",
+    "build:tauri-renderer": "vite build --config vite.tauri.config.ts",
+    "tauri": "tauri",
+    "dev:tauri": "tauri dev",
+    "build:tauri": "tauri build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -77,6 +82,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/electron": "^7.5.0",
     "@tailwindcss/typography": "^0.5.19",
+    "@tauri-apps/api": "^2.0.0",
     "@tanstack/react-virtual": "^3.13.13",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -115,6 +121,7 @@
     "@electron/rebuild": "^4.0.2",
     "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4.1.17",
+    "@tauri-apps/cli": "^2.0.0",
     "@testing-library/dom": "^10.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.1.0",
