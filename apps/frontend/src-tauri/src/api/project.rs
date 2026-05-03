@@ -10,14 +10,14 @@ const APP_NAME: &str = "auto-claude-ui";
 
 /// Resolves to `<userData>/store/projects.json` matching Electron's path so
 /// the Electron and Tauri builds share project state during parallel ship.
-fn store_path() -> AppResult<PathBuf> {
+pub(crate) fn store_path() -> AppResult<PathBuf> {
     let base = dirs::config_dir()
         .ok_or_else(|| AppError::new("no_config_dir", "Could not resolve OS config directory"))?;
     Ok(base.join(APP_NAME).join("store").join("projects.json"))
 }
 
 #[derive(Default, Debug)]
-struct Store {
+pub(crate) struct Store {
     raw: Value,
 }
 
@@ -39,7 +39,7 @@ impl Store {
         self.raw.as_object_mut().expect("ensured above")
     }
 
-    fn projects(&self) -> Vec<Value> {
+    pub(crate) fn projects(&self) -> Vec<Value> {
         self.raw
             .get("projects")
             .and_then(|v| v.as_array())
@@ -86,7 +86,7 @@ impl Store {
     }
 }
 
-fn read_store_at(path: &Path) -> Store {
+pub(crate) fn read_store_at(path: &Path) -> Store {
     if !path.exists() {
         return Store::default();
     }

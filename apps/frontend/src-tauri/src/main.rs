@@ -76,6 +76,14 @@ fn main() {
             api::diagnostics::diag_get_rdr_state,
             api::diagnostics::diag_force_usage_fetch,
             api::diagnostics::diag_send_test_rdr,
+            // Task domain (Phase 2 round 4a + 4e — CRUD + archive)
+            api::task::task_list,
+            api::task::task_create,
+            api::task::task_delete,
+            api::task::task_update,
+            api::task::task_archive,
+            api::task::task_unarchive,
+            api::task::task_toggle_rdr,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

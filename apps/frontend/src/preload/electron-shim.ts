@@ -229,12 +229,44 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<unknown>('diag_send_test_rdr'),
   };
 
+  // Task domain (Phase 2 round 4a + 4e) — CRUD + archive read/write the same
+  // .auto-claude/specs/ directories the Electron build uses. Execution
+  // (start/stop/recover), worktree, logs, and IDE integration remain Proxy
+  // stubs until the corresponding subsystem rounds.
+  const taskAPI = {
+    getTasks: (projectId: string, options?: unknown) =>
+      safeInvoke<unknown[]>('task_list', { projectId, options }),
+    createTask: (
+      projectId: string,
+      title: string,
+      description: string,
+      metadata?: unknown,
+    ) =>
+      safeInvoke<unknown>('task_create', {
+        projectId,
+        title,
+        description,
+        metadata,
+      }),
+    deleteTask: (taskId: string) =>
+      safeInvoke<null>('task_delete', { taskId }),
+    updateTask: (taskId: string, updates: unknown) =>
+      safeInvoke<unknown>('task_update', { taskId, updates }),
+    archiveTasks: (projectId: string, taskIds: string[], version?: string) =>
+      safeInvoke<boolean>('task_archive', { projectId, taskIds, version }),
+    unarchiveTasks: (projectId: string, taskIds: string[]) =>
+      safeInvoke<boolean>('task_unarchive', { projectId, taskIds }),
+    toggleTaskRdr: (taskId: string, disabled: boolean) =>
+      safeInvoke<boolean>('task_toggle_rdr', { taskId, disabled }),
+  };
+
   const implemented: Record<string, unknown> = {
     ...desktopAPI,
     ...settingsAPI,
     ...claudeCodeAPI,
     ...projectAPI,
     ...fileAndDebugAPI,
+    ...taskAPI,
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {
         // Phase 1 spike: activity_record handler not ported yet. Swallow.

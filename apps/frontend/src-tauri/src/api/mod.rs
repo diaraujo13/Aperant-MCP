@@ -6,3 +6,4 @@ pub mod file;
 pub mod project;
 pub mod screenshot;
 pub mod settings;
+pub mod task;
