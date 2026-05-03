@@ -4,9 +4,18 @@ use crate::types::IpcResult;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::process::Command;
+use tokio::time::timeout;
 
 const NPM_PACKAGE: &str = "@anthropic-ai/claude-code";
+/// `claude --version` should return in well under a second on a healthy install.
+/// 5s is generous and protects against malicious wrapper scripts that block
+/// indefinitely on stdin or sleep forever.
+const CLAUDE_VERSION_TIMEOUT: Duration = Duration::from_secs(5);
+/// `npm view` over a slow network or behind a corporate proxy can take a few
+/// seconds; 30s is the upper bound before we give up and report "unknown".
+const NPM_VIEW_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,7 +88,10 @@ fn candidate_paths() -> Vec<(PathBuf, &'static str)> {
             (PathBuf::from("/opt/homebrew/bin/claude"), "homebrew"),
             (PathBuf::from("/usr/local/bin/claude"), "system-path"),
             (home.join(".npm-global/bin/claude"), "system-path"),
-            (home.join(".nvm/versions/node").join("current/bin/claude"), "nvm"),
+            (
+                home.join(".nvm/versions/node").join("current/bin/claude"),
+                "nvm",
+            ),
         ]);
     } else if cfg!(target_os = "linux") {
         paths.extend([
@@ -99,20 +111,60 @@ fn candidate_paths() -> Vec<(PathBuf, &'static str)> {
     paths
 }
 
+/// Returns the saved `claudePath` from settings.json, or None if not configured.
+fn get_active_path_from_settings() -> Option<String> {
+    let path = settings::settings_path().ok()?;
+    let s = settings::read_settings_at(&path);
+    s.get("claudePath")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
+/// All paths to check, in priority order: user-configured first, then candidates.
+/// This is the fix for the bug Codex flagged where `set_active_path` saved a path
+/// but `check_version` ignored it entirely.
+fn paths_to_probe() -> Vec<(PathBuf, &'static str)> {
+    let mut out: Vec<(PathBuf, &'static str)> = Vec::new();
+    if let Some(active) = get_active_path_from_settings() {
+        out.push((PathBuf::from(active), "user-config"));
+    }
+    out.extend(candidate_paths());
+    out
+}
+
+/// Extracts a semver-shaped version from a free-form `--version` output line.
+/// Tries each whitespace-separated token (stripping a leading `v`) and returns
+/// the first one that parses as a valid semver. This avoids the bug where
+/// `claude-code version 1.2.3` returned `claude-code` as the version.
+fn extract_version(stdout: &str) -> Option<String> {
+    stdout.split_whitespace().find_map(|token| {
+        let candidate = token.trim_start_matches('v').trim_end_matches([',', ';', ')']);
+        semver::Version::parse(candidate)
+            .ok()
+            .map(|_| candidate.to_string())
+    })
+}
+
+/// Runs `<path> --version` with a hard timeout. Returns None on any failure
+/// (process spawn error, non-zero exit, no parseable version, or timeout).
 async fn detect_version(path: &PathBuf) -> Option<String> {
-    let output = Command::new(path).arg("--version").output().await.ok()?;
+    let cmd = Command::new(path).arg("--version").output();
+    let output = timeout(CLAUDE_VERSION_TIMEOUT, cmd).await.ok()?.ok()?;
     if !output.status.success() {
         return None;
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout.split_whitespace().next().map(String::from)
+    extract_version(&stdout)
 }
 
 async fn fetch_latest_npm_version() -> AppResult<String> {
-    let output = Command::new("npm")
+    let cmd = Command::new("npm")
         .args(["view", NPM_PACKAGE, "version"])
-        .output()
+        .output();
+    let output = timeout(NPM_VIEW_TIMEOUT, cmd)
         .await
+        .map_err(|_| AppError::new("npm_timeout", "npm view timed out after 30s"))?
         .map_err(|e| AppError::new("npm_spawn_failed", e.to_string()))?;
 
     if !output.status.success() {
@@ -125,24 +177,17 @@ async fn fetch_latest_npm_version() -> AppResult<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// Strict semver compare. Falls back to false when either side is unparseable.
 fn is_outdated_semver(installed: &str, latest: &str) -> bool {
-    let parse = |s: &str| -> Vec<u32> {
-        s.split('.').filter_map(|x| x.parse().ok()).collect()
-    };
-    let i = parse(installed);
-    let l = parse(latest);
-    if i.is_empty() || l.is_empty() {
-        return false;
+    let installed = installed.trim_start_matches('v');
+    let latest = latest.trim_start_matches('v');
+    match (
+        semver::Version::parse(installed),
+        semver::Version::parse(latest),
+    ) {
+        (Ok(i), Ok(l)) => i < l,
+        _ => false,
     }
-    i < l
-}
-
-fn get_active_path_from_settings() -> Option<String> {
-    let path = settings::settings_path().ok()?;
-    let s = settings::read_settings_at(&path);
-    s.get("claudePath")
-        .and_then(|v| v.as_str())
-        .map(String::from)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -151,7 +196,7 @@ pub async fn claude_code_check_version() -> AppResult<IpcResult<ClaudeCodeVersio
     let mut found_path: Option<PathBuf> = None;
     let mut detected_source = "fallback";
 
-    for (path, src) in candidate_paths() {
+    for (path, src) in paths_to_probe() {
         if !path.exists() {
             continue;
         }
@@ -198,7 +243,7 @@ pub async fn claude_code_get_installations() -> AppResult<IpcResult<ClaudeInstal
     let active_path = get_active_path_from_settings();
     let mut installations = Vec::new();
 
-    for (path, source) in candidate_paths() {
+    for (path, source) in paths_to_probe() {
         if !path.exists() {
             continue;
         }
@@ -221,10 +266,12 @@ pub async fn claude_code_get_installations() -> AppResult<IpcResult<ClaudeInstal
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_code_get_versions() -> AppResult<IpcResult<ClaudeCodeVersionList>> {
-    let output = Command::new("npm")
+    let cmd = Command::new("npm")
         .args(["view", NPM_PACKAGE, "versions", "--json"])
-        .output()
+        .output();
+    let output = timeout(NPM_VIEW_TIMEOUT, cmd)
         .await
+        .map_err(|_| AppError::new("npm_timeout", "npm view versions timed out after 30s"))?
         .map_err(|e| AppError::new("npm_spawn_failed", e.to_string()))?;
 
     if !output.status.success() {
@@ -299,10 +346,68 @@ mod tests {
     }
 
     #[test]
+    fn semver_compare_handles_prereleases_correctly() {
+        // Per semver spec: 1.0.0-alpha < 1.0.0-beta < 1.0.0
+        assert!(is_outdated_semver("1.0.0-alpha", "1.0.0-beta"));
+        assert!(is_outdated_semver("1.0.0-alpha", "1.0.0"));
+        assert!(is_outdated_semver("1.0.0-rc.1", "1.0.0"));
+        assert!(!is_outdated_semver("1.0.0", "1.0.0-rc.1"));
+    }
+
+    #[test]
+    fn semver_compare_strips_v_prefix() {
+        assert!(is_outdated_semver("v1.2.3", "v1.2.4"));
+        assert!(is_outdated_semver("v1.2.3", "1.2.4"));
+        assert!(is_outdated_semver("1.2.3", "v1.2.4"));
+    }
+
+    #[test]
+    fn extract_version_from_typical_output() {
+        // The bug Codex flagged: "claude-code version 1.2.3" was returning "claude-code"
+        assert_eq!(
+            extract_version("claude-code version 1.2.3"),
+            Some("1.2.3".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_version_from_bare_version() {
+        assert_eq!(extract_version("1.2.3"), Some("1.2.3".to_string()));
+        assert_eq!(extract_version("1.2.3\n"), Some("1.2.3".to_string()));
+    }
+
+    #[test]
+    fn extract_version_strips_v_prefix() {
+        assert_eq!(extract_version("v1.2.3"), Some("1.2.3".to_string()));
+        assert_eq!(
+            extract_version("claude v1.2.3 (build abc)"),
+            Some("1.2.3".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_version_handles_prerelease() {
+        assert_eq!(
+            extract_version("1.0.0-rc.1 (Claude Code)"),
+            Some("1.0.0-rc.1".to_string())
+        );
+        assert_eq!(
+            extract_version("v2.0.0-beta.5"),
+            Some("2.0.0-beta.5".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_version_returns_none_when_no_semver() {
+        assert_eq!(extract_version("not a version"), None);
+        assert_eq!(extract_version(""), None);
+        assert_eq!(extract_version("v"), None);
+    }
+
+    #[test]
     fn install_command_format() {
         let cmd = format!("npm install -g {NPM_PACKAGE}");
-        assert!(cmd.contains("@anthropic-ai/claude-code"));
-        assert!(cmd.starts_with("npm install -g"));
+        assert_eq!(cmd, "npm install -g @anthropic-ai/claude-code");
     }
 
     #[test]
@@ -315,7 +420,6 @@ mod tests {
     #[test]
     fn candidate_paths_per_os_returns_some_entries() {
         let paths = candidate_paths();
-        // Every OS we target has at least one candidate
         if cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows")) {
             assert!(!paths.is_empty());
         }

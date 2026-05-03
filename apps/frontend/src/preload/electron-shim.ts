@@ -225,21 +225,25 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
 
   window.electronAPI = proxy as unknown as ElectronAPI;
 
-  // Phase 1 debug: expose raw invoke + listen so we can test transport
-  // without going through the shim layer. Remove before Phase 2.
-  (window as unknown as { __tauriDebug: unknown }).__tauriDebug = {
-    invoke,
-    listen,
-    test: async (cmd: string = 'desktop_state_get', args?: Record<string, unknown>) => {
-      const t0 = performance.now();
-      try {
-        const result = await invoke(cmd, args);
-        return { ok: true, ms: performance.now() - t0, result };
-      } catch (err) {
-        return { ok: false, ms: performance.now() - t0, err: String(err) };
-      }
-    },
-  };
+  // Debug surface: raw invoke + listen + a test helper for the DevTools console.
+  // Gated on import.meta.env.DEV so Vite tree-shakes the entire block out of
+  // production bundles — prod renderers should never have direct invoke access.
+  // (Codex Phase 2 round 2.5: closes XSS-to-IPC escalation surface.)
+  if (import.meta.env.DEV) {
+    (window as unknown as { __tauriDebug: unknown }).__tauriDebug = {
+      invoke,
+      listen,
+      test: async (cmd: string = 'desktop_state_get', args?: Record<string, unknown>) => {
+        const t0 = performance.now();
+        try {
+          const result = await invoke(cmd, args);
+          return { ok: true, ms: performance.now() - t0, result };
+        } catch (err) {
+          return { ok: false, ms: performance.now() - t0, err: String(err) };
+        }
+      },
+    };
+  }
 
   // eslint-disable-next-line no-console
   console.info(
