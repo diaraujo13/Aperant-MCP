@@ -105,8 +105,60 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     },
   };
 
+  // Settings domain (Phase 2 round 1) — getSettings/saveSettings persist to the
+  // SAME settings.json the Electron build uses (~/Library/Application Support/auto-claude-ui/
+  // on macOS), so settings round-trip cleanly between the two builds during the
+  // parallel ship period.
+  const settingsAPI = {
+    getSettings: () =>
+      safeInvoke<Record<string, unknown>>('settings_get'),
+    saveSettings: (settings: Record<string, unknown>) =>
+      safeInvoke<null>('settings_save', { settings }),
+    getCliToolsInfo: () =>
+      safeInvoke<unknown>('settings_get_cli_tools_info'),
+    getClaudeCodeOnboardingStatus: () =>
+      safeInvoke<unknown>('settings_claude_code_get_onboarding_status'),
+    getProviderAccounts: () =>
+      safeInvoke<unknown>('provider_accounts_get'),
+    setSpellCheckLanguages: (language: string) =>
+      safeInvoke<unknown>('spellcheck_set_languages', { language }),
+    getSourceEnv: () =>
+      safeInvoke<unknown>('autobuild_source_env_get'),
+    // Raw-value methods (NOT IPCResult-wrapped to match Electron contract)
+    getAppVersion: async () => {
+      try {
+        return await invoke<string>('app_version');
+      } catch {
+        return '0.0.0';
+      }
+    },
+    getSentryDsn: async () => {
+      try {
+        return await invoke<string>('get_sentry_dsn');
+      } catch {
+        return '';
+      }
+    },
+    getSentryConfig: async () => {
+      try {
+        return await invoke<{
+          dsn: string;
+          tracesSampleRate: number;
+          profilesSampleRate: number;
+        }>('get_sentry_config');
+      } catch {
+        return { dsn: '', tracesSampleRate: 0, profilesSampleRate: 0 };
+      }
+    },
+    notifySentryStateChanged: (_enabled: boolean) => {
+      // Phase 6 (Sentry split): wire to a Rust panic hook + browser SDK.
+      // For now, no-op — Sentry is disabled in the Tauri build.
+    },
+  };
+
   const implemented: Record<string, unknown> = {
     ...desktopAPI,
+    ...settingsAPI,
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {
         // Phase 1 spike: activity_record handler not ported yet. Swallow.

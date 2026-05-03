@@ -27,10 +27,22 @@ fn main() {
     tauri::Builder::default()
         .manage(desktop_state)
         .invoke_handler(tauri::generate_handler![
+            // Desktop domain (Phase 1)
             api::desktop::desktop_state_get,
             api::desktop::desktop_pin_set,
             api::desktop::desktop_project_associate,
             api::desktop::desktop_project_clear,
+            // Settings domain (Phase 2 round 1)
+            api::settings::settings_get,
+            api::settings::settings_save,
+            api::settings::app_version,
+            api::settings::get_sentry_dsn,
+            api::settings::get_sentry_config,
+            api::settings::settings_get_cli_tools_info,
+            api::settings::settings_claude_code_get_onboarding_status,
+            api::settings::provider_accounts_get,
+            api::settings::spellcheck_set_languages,
+            api::settings::autobuild_source_env_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
