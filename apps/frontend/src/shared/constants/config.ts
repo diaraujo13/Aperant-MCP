@@ -129,11 +129,15 @@ export const DEFAULT_PROJECT_SETTINGS = {
 // Default RDR Mechanisms
 // ============================================
 
+export const WINDOWS_RDR_MECHANISM_ID = 'windows-claude-code-vscode';
+export const MACOS_RDR_MECHANISM_ID = 'macos-claude-code-direct-send';
+export const RDR_PLATFORM_DEFAULT_TEMPLATE = '__AUTO_CLAUDE_PLATFORM_DEFAULT__';
+
 // Default RDR sending mechanisms (profiles)
 // Users can create additional mechanisms in settings
 export const DEFAULT_RDR_MECHANISMS = [
   {
-    id: 'windows-claude-code-vscode',
+    id: WINDOWS_RDR_MECHANISM_ID,
     name: 'Windows Claude Code for VS Code',
     template: `$ProgressPreference = 'SilentlyContinue'
 $Handle = {{identifier}}
@@ -202,8 +206,18 @@ if ($original -ne [IntPtr]::Zero -and $original -ne [IntPtr]$Handle) {
 
 Write-Output "Message sent successfully"`,
     isDefault: true
+  },
+  {
+    id: MACOS_RDR_MECHANISM_ID,
+    name: 'macOS Claude Code Direct Send',
+    template: RDR_PLATFORM_DEFAULT_TEMPLATE,
+    isDefault: true
   }
 ];
+
+export function getDefaultRdrMechanismId(platform: string): string {
+  return platform === 'darwin' ? MACOS_RDR_MECHANISM_ID : WINDOWS_RDR_MECHANISM_ID;
+}
 
 // ============================================
 // Auto Build File Paths

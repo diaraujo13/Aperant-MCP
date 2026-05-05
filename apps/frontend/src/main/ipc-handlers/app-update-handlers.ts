@@ -5,17 +5,11 @@
  * Provides manual controls for checking, downloading, and installing updates.
  */
 
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult, AppUpdateInfo } from '../../shared/types';
-import {
-  checkForUpdates,
-  downloadUpdate,
-  downloadStableVersion,
-  quitAndInstall,
-  getCurrentVersion,
-  getDownloadedUpdateInfo
-} from '../app-updater';
+
+const APP_UPDATES_DISABLED_MESSAGE = 'App updates are disabled in this build.';
 
 /**
  * Register all app-update-related IPC handlers
@@ -23,91 +17,56 @@ import {
 export function registerAppUpdateHandlers(): void {
   console.warn('[IPC] Registering app update handlers');
 
-  // ============================================
-  // App Update Operations
-  // ============================================
-
   /**
    * APP_UPDATE_CHECK: Manually check for updates
-   * Returns update availability and version information
+   * Updates are disabled, so always report no update available.
    */
   ipcMain.handle(
     IPC_CHANNELS.APP_UPDATE_CHECK,
     async (): Promise<IPCResult<AppUpdateInfo | null>> => {
-      try {
-        const result = await checkForUpdates();
-        return { success: true, data: result };
-      } catch (error) {
-        console.error('[app-update-handlers] Check for updates failed:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to check for updates'
-        };
-      }
+      return { success: true, data: null };
     }
   );
 
   /**
    * APP_UPDATE_DOWNLOAD: Manually download update
-   * Triggers download of available update
+   * Updates are disabled, so reject the request.
    */
   ipcMain.handle(
     IPC_CHANNELS.APP_UPDATE_DOWNLOAD,
     async (): Promise<IPCResult> => {
-      try {
-        await downloadUpdate();
-        return { success: true };
-      } catch (error) {
-        console.error('[app-update-handlers] Download update failed:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to download update'
-        };
-      }
+      return {
+        success: false,
+        error: APP_UPDATES_DISABLED_MESSAGE,
+      };
     }
   );
 
   /**
    * APP_UPDATE_DOWNLOAD_STABLE: Download stable version (for downgrade from beta)
-   * Uses allowDowngrade to download an older stable version
+   * Updates are disabled, so reject the request.
    */
   ipcMain.handle(
     IPC_CHANNELS.APP_UPDATE_DOWNLOAD_STABLE,
     async (): Promise<IPCResult> => {
-      try {
-        await downloadStableVersion();
-        return { success: true };
-      } catch (error) {
-        console.error('[app-update-handlers] Download stable version failed:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to download stable version'
-        };
-      }
+      return {
+        success: false,
+        error: APP_UPDATES_DISABLED_MESSAGE,
+      };
     }
   );
 
   /**
    * APP_UPDATE_INSTALL: Quit and install update
-   * Quits the app and installs the downloaded update
+   * Updates are disabled, so reject the request.
    */
   ipcMain.handle(
     IPC_CHANNELS.APP_UPDATE_INSTALL,
     async (): Promise<IPCResult> => {
-      try {
-        // quitAndInstall() returns false if blocked by read-only volume,
-        // but the user is notified via APP_UPDATE_READONLY_VOLUME event instead.
-        // The preload fires this as fire-and-forget, so the return value is
-        // only consumed by the .catch() handler for unexpected errors.
-        quitAndInstall();
-        return { success: true };
-      } catch (error) {
-        console.error('[app-update-handlers] Install update failed:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to install update'
-        };
-      }
+      return {
+        success: false,
+        error: APP_UPDATES_DISABLED_MESSAGE,
+      };
     }
   );
 
@@ -118,13 +77,7 @@ export function registerAppUpdateHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.APP_UPDATE_GET_VERSION,
     async (): Promise<string> => {
-      try {
-        const version = getCurrentVersion();
-        return version;
-      } catch (error) {
-        console.error('[app-update-handlers] Get version failed:', error);
-        throw error;
-      }
+      return app.getVersion();
     }
   );
 
@@ -138,16 +91,7 @@ export function registerAppUpdateHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.APP_UPDATE_GET_DOWNLOADED,
     async (): Promise<IPCResult<AppUpdateInfo | null>> => {
-      try {
-        const downloadedInfo = getDownloadedUpdateInfo();
-        return { success: true, data: downloadedInfo };
-      } catch (error) {
-        console.error('[app-update-handlers] Get downloaded update info failed:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get downloaded update info'
-        };
-      }
+      return { success: true, data: null };
     }
   );
 

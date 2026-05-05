@@ -260,6 +260,48 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<boolean>('task_toggle_rdr', { taskId, disabled }),
   };
 
+  // Terminal subsystem (Phase 4 spike) — real PTY via portable-pty Rust crate.
+  // Output streams via Tauri events; renderer xterm.js sees keystrokes round-trip.
+  // Claude integration / session restore / worktree config remain Proxy stubs
+  // until their dedicated rounds.
+  const terminalAPI = {
+    createTerminal: (options: {
+      id: string;
+      cwd?: string;
+      shell?: string;
+      cols?: number;
+      rows?: number;
+      env?: Record<string, string>;
+    }) => safeInvoke<{ id: string }>('terminal_create', { options }),
+    destroyTerminal: (id: string) =>
+      safeInvoke<null>('terminal_destroy', { id }),
+    sendTerminalInput: (id: string, data: string) => {
+      // Fire-and-forget to match the Electron contract (it uses ipcRenderer.send)
+      void invoke('terminal_input', { id, data }).catch(() => {});
+    },
+    resizeTerminal: (id: string, cols: number, rows: number) =>
+      safeInvoke<{ success: boolean }>('terminal_resize', { id, cols, rows }),
+    onTerminalOutput: (callback: (id: string, data: string) => void) => {
+      // Tauri emits a single payload object; renderer expects (id, data) positional
+      const p = listen<{ id: string; data: string }>(
+        'terminal:output',
+        (event) => callback(event.payload.id, event.payload.data),
+      );
+      return makeUnsubscribe(p);
+    },
+    onTerminalExit: (
+      callback: (id: string, code: number | null) => void,
+    ) => {
+      const p = listen<{ id: string; code: number | null }>(
+        'terminal:exit',
+        (event) => callback(event.payload.id, event.payload.code),
+      );
+      return makeUnsubscribe(p);
+    },
+    checkPtyAlive: (id: string) =>
+      safeInvoke<boolean>('terminal_check_alive', { id }),
+  };
+
   const implemented: Record<string, unknown> = {
     ...desktopAPI,
     ...settingsAPI,
@@ -267,6 +309,7 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     ...projectAPI,
     ...fileAndDebugAPI,
     ...taskAPI,
+    ...terminalAPI,
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {
         // Phase 1 spike: activity_record handler not ported yet. Swallow.

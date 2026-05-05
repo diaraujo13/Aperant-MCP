@@ -79,7 +79,6 @@ import { TerminalManager } from './terminal-manager';
 import { pythonEnvManager } from './python-env-manager';
 import { getUsageMonitor } from './claude-profile/usage-monitor';
 import { initializeUsageMonitorForwarding } from './ipc-handlers/terminal-handlers';
-import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { DEFAULT_APP_SETTINGS, IPC_CHANNELS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { readSettingsFile } from './settings-utils';
@@ -1028,27 +1027,10 @@ app.whenReady().then(() => {
       console.warn('[main] ========================================');
     }
 
-    // Initialize app auto-updater (only in production, or when DEBUG_UPDATER is set)
-    const forceUpdater = process.env.DEBUG_UPDATER === 'true';
-    if (app.isPackaged || forceUpdater) {
-      // Load settings to get beta updates preference
-      const settings = loadSettingsSync();
-      const betaUpdates = settings.betaUpdates ?? false;
-
-      initializeAppUpdater(mainWindow, betaUpdates);
-      console.warn('[main] App auto-updater initialized');
-      console.warn(`[main] Beta updates: ${betaUpdates ? 'enabled' : 'disabled'}`);
-      if (forceUpdater && !app.isPackaged) {
-        console.warn('[main] Updater forced in dev mode via DEBUG_UPDATER=true');
-        console.warn('[main] Note: Updates won\'t actually work in dev mode');
-      }
-    } else {
-      console.warn('[main] ========================================');
-      console.warn('[main] App auto-updater DISABLED (development mode)');
-      console.warn('[main] To test updater logging, set DEBUG_UPDATER=true');
-      console.warn('[main] Note: Actual updates only work in packaged builds');
-      console.warn('[main] ========================================');
-    }
+    console.warn('[main] ========================================');
+    console.warn('[main] App auto-updater DISABLED');
+    console.warn('[main] Automatic checks, download prompts, and install hooks are turned off');
+    console.warn('[main] ========================================');
   }
 
   // macOS: re-create window when dock icon is clicked
@@ -1099,7 +1081,6 @@ app.on('before-quit', (event) => {
   // Stop synchronous services immediately
   stopHeartbeat();
   activityMonitor.stop();
-  stopPeriodicUpdates();
   desktopNotificationBridge.stop();
 
   const usageMonitor = getUsageMonitor();
@@ -1134,4 +1115,3 @@ app.on('before-quit', (event) => {
 
 // Note: Uncaught exceptions and unhandled rejections are now
 // logged by setupErrorLogging() in app-logger.ts
-

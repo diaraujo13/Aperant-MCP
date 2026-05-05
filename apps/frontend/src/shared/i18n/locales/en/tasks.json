@@ -310,6 +310,8 @@
   "form": {
     "description": "Description",
     "descriptionPlaceholder": "Describe the feature, bug fix, or improvement you want to implement. Be as specific as possible about requirements, constraints, and expected behavior.",
+    "refineDescription": "Refine description",
+    "refiningDescription": "Refining...",
     "imageAddedSuccess": "Image added successfully!",
     "taskTitle": "Task Title",
     "titlePlaceholder": "Leave empty to auto-generate from description",
@@ -325,6 +327,7 @@
     "fastModeNotice": "Requires \"extra usage\" enabled on your Claude subscription.",
     "errors": {
       "descriptionRequired": "Please provide a description",
+      "refineFailed": "Failed to refine the description",
       "maxImagesReached": "Maximum of 5 images allowed",
       "invalidImageType": "Invalid image type. Allowed: PNG, JPEG, GIF, WebP",
       "processPasteFailed": "Failed to process pasted image",

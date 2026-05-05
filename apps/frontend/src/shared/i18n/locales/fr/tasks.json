@@ -310,6 +310,8 @@
   "form": {
     "description": "Description",
     "descriptionPlaceholder": "Décrivez la fonctionnalité, la correction de bug ou l'amélioration que vous souhaitez implémenter. Soyez aussi précis que possible sur les exigences, les contraintes et le comportement attendu.",
+    "refineDescription": "Améliorer la description",
+    "refiningDescription": "Amélioration...",
     "imageAddedSuccess": "Image ajoutée avec succès !",
     "taskTitle": "Titre de la tâche",
     "titlePlaceholder": "Laissez vide pour générer automatiquement à partir de la description",
@@ -325,6 +327,7 @@
     "fastModeNotice": "Nécessite « utilisation supplémentaire » activée sur votre abonnement Claude.",
     "errors": {
       "descriptionRequired": "Veuillez fournir une description",
+      "refineFailed": "Échec de l'amélioration de la description",
       "maxImagesReached": "Maximum de 5 images autorisé",
       "invalidImageType": "Type d'image non valide. Autorisés : PNG, JPEG, GIF, WebP",
       "processPasteFailed": "Échec du traitement de l'image collée",

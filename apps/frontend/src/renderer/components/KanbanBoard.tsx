@@ -663,7 +663,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
 }, droppableColumnPropsAreEqual);
 
 export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isRefreshing }: KanbanBoardProps) {
-  const { t } = useTranslation(['tasks', 'dialogs', 'common']);
+  const { t, i18n } = useTranslation(['tasks', 'dialogs', 'common']);
   const { toast } = useToast();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
@@ -1739,6 +1739,11 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Per-project window selection � each project tab has its own RDR target window
   const perProjectWindowRef = useRef<Map<string, number>>(new Map());
   const selectedWindowPid = projectId ? (perProjectWindowRef.current.get(projectId) ?? null) : null;
+  const isWindowsPlatform = window.platform?.isWindows ?? false;
+  const canSendRdrDirect = Boolean(projectId && (!isWindowsPlatform || selectedWindowPid));
+  const directRdrIdentifier: number | string = isWindowsPlatform
+    ? (selectedWindowPid ?? 'Claude Code')
+    : 'Claude Code';
   const setSelectedWindowPid = (handle: number | null) => {
     if (projectId && handle !== null) {
       perProjectWindowRef.current.set(projectId, handle);
@@ -1829,6 +1834,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Load VS Code windows from system and hydrate the persisted per-project assignment when available.
   const loadVsCodeWindows = useCallback(async () => {
+    if (!isWindowsPlatform) {
+      setVsCodeWindows([]);
+      setSelectedWindowPid(null);
+      return;
+    }
+
     setIsLoadingWindows(true);
     try {
       const windowsResult = await window.electronAPI.getVSCodeWindows();
@@ -1870,7 +1881,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     } finally {
       setIsLoadingWindows(false);
     }
-  }, [projectId, resolveAssignedWindowHandle]);
+  }, [isWindowsPlatform, projectId, resolveAssignedWindowHandle]);
 
   // Load windows on mount and whenever the active project changes.
   useEffect(() => {
@@ -1903,7 +1914,13 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     }>;
   }): string => {
     const lines: string[] = ['/auto-claude-rdr'];
+    const language = i18n.language.toLowerCase();
+    const isPortuguese = language === 'pt-br' || language === 'pt' || language.startsWith('pt-');
     lines.push('');
+    if (isPortuguese) {
+      lines.push('IMPORTANT: respond in Brazilian Portuguese (pt-BR).');
+      lines.push('');
+    }
     lines.push('[Auto-Claude RDR] Tasks needing intervention:');
     lines.push('');
     lines.push(`**Project UUID:** ${data.projectId}`);
@@ -2178,7 +2195,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     lines.push(`- \`mcp__auto-claude-manager__get_rdr_batches\` — Get all recovery batches`);
 
     return lines.join('\n');
-  }, []);
+  }, [i18n.language]);
 
   /**
    * Handle automatic RDR processing every 60 seconds
@@ -2193,24 +2210,26 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       return;
     }
 
-    if (rdrCooldownRef.current.paused || !selectedWindowPid || !projectId) {
+    if (rdrCooldownRef.current.paused || !projectId || !canSendRdrDirect) {
       return;
     }
 
-    const selectedWindow = vsCodeWindows.find(w => w.handle === selectedWindowPid);
-    if (!selectedWindow) {
-      return;
+    let targetIdentifier: number | string = directRdrIdentifier;
+    if (isWindowsPlatform) {
+      const selectedWindow = vsCodeWindows.find((windowInfo) => windowInfo.handle === selectedWindowPid);
+      if (!selectedWindow) {
+        return;
+      }
+      targetIdentifier = selectedWindow.handle;
     }
 
     // LOCK immediately — before any async work
     rdrMessageInFlightRef.current = true;
 
-    const handle = selectedWindow.handle;
-
     try {
       // Check busy state
       try {
-        const busyResult = await window.electronAPI.isClaudeCodeBusy(handle);
+        const busyResult = await window.electronAPI.isClaudeCodeBusy(targetIdentifier);
         if (busyResult.success && busyResult.data) {
           console.log('[RDR] Skipping auto-send - Claude Code is busy');
           rdrMessageInFlightRef.current = false;
@@ -2233,7 +2252,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       const message = buildRdrMessage({ ...result.data, projectId, projectPath: result.data.projectPath });
       console.log(`[RDR] Sending detailed message with ${result.data.taskDetails.length} tasks`);
 
-      const sendResult = await window.electronAPI.sendRdrToWindow(handle, message);
+      const sendResult = await window.electronAPI.sendRdrToWindow(targetIdentifier, message);
 
       if (sendResult.success) {
         console.log('[RDR] Auto-send successful');
@@ -2244,7 +2263,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         });
       } else {
         console.error('[RDR] Auto-send failed:', sendResult.data?.error);
-        loadVsCodeWindows();
+        if (isWindowsPlatform) {
+          loadVsCodeWindows();
+        }
         // Clear in-flight on send failure — safe now that guard is synchronous (before any await).
         // 10s cooldown prevents rapid retries without blocking for full 2min timeout.
         setTimeout(() => {
@@ -2266,7 +2287,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         rdrMessageInFlightRef.current = false;
       }, 10_000);
     }
-  }, [selectedWindowPid, projectId, buildRdrMessage, toast, t, vsCodeWindows]);
+  }, [buildRdrMessage, canSendRdrDirect, directRdrIdentifier, isWindowsPlatform, loadVsCodeWindows, projectId, selectedWindowPid, toast, t, vsCodeWindows]);
 
   // EVENT-DRIVEN RDR: Check immediately on startup, then respond to idle events
   useEffect(() => {
@@ -2276,8 +2297,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       rdrIntervalRef.current = null;
     }
 
-    // Only start timer if RDR is enabled AND a window is selected
-    if (rdrEnabled && selectedWindowPid) {
+    // Only start timer if RDR is enabled AND a direct-send target is available
+    if (rdrEnabled && canSendRdrDirect) {
       console.log(`[RDR] Starting event-driven RDR - delayed initial check + idle event triggers`);
 
       // DELAYED CHECK: Give OutputMonitor time to detect current state (5s grace period)
@@ -2339,9 +2360,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         }
       };
     } else {
-      console.log('[RDR] Auto-send timer not started (RDR disabled or no window selected)');
+      console.log('[RDR] Auto-send timer not started (RDR disabled or no direct-send target)');
     }
-  }, [rdrEnabled, selectedWindowPid, handleAutoRdr]);
+  }, [canSendRdrDirect, rdrEnabled, handleAutoRdr]);
 
   // RDR Rate Limit Pause: subscribe to IPC events + query initial state
   useEffect(() => {
@@ -2552,21 +2573,32 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       return;
     }
 
-    // Check if a window is selected for direct sending
-    if (selectedWindowPid) {
-      // Find window title from selected handle
-      const selectedWindow = vsCodeWindows.find(w => w.handle === selectedWindowPid);
-      if (!selectedWindow) {
+    // Check if direct sending is available
+    if (canSendRdrDirect) {
+      let targetIdentifier: number | string = directRdrIdentifier;
+
+      if (isWindowsPlatform) {
+        const selectedWindow = vsCodeWindows.find((windowInfo) => windowInfo.handle === selectedWindowPid);
+        if (!selectedWindow) {
+          toast({
+            title: t('kanban.rdrSendFailed'),
+            description: t('kanban.rdrSelectedWindowNotFound'),
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        targetIdentifier = selectedWindow.handle;
+      }
+
+      if (!projectId) {
         toast({
           title: t('kanban.rdrSendFailed'),
-          description: t('kanban.rdrSelectedWindowNotFound'),
+          description: t('kanban.rdrSendFailedDesc'),
           variant: 'destructive'
         });
         return;
       }
-
-      // Use window handle for stable matching (title changes when user switches editor tabs)
-      const handle = selectedWindow.handle;
 
       // Send directly to VS Code window with detailed message
       toast({
@@ -2586,7 +2618,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           message = 'Check RDR batches and fix errored tasks';
         }
 
-        const result = await window.electronAPI.sendRdrToWindow(handle, message);
+        const result = await window.electronAPI.sendRdrToWindow(targetIdentifier, message);
 
         if (result.success) {
           toast({
@@ -2594,7 +2626,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
             description: t('kanban.rdrSendSuccessDesc'),
             variant: 'default'
           });
-          console.log(`[KanbanBoard] RDR message sent to window handle ${selectedWindowPid}`);
+          console.log(`[KanbanBoard] RDR message sent to ${typeof targetIdentifier === 'number' ? `window handle ${targetIdentifier}` : targetIdentifier}`);
         } else {
           toast({
             title: t('kanban.rdrSendFailed'),
@@ -2647,18 +2679,23 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
 
   const handleTestRdrPrompt = async () => {
-    if (!projectId || !selectedWindowPid) {
+    if (!projectId || !canSendRdrDirect) {
       return;
     }
 
-    const selectedWindow = vsCodeWindows.find((window) => window.handle === selectedWindowPid);
-    if (!selectedWindow) {
-      toast({
-        title: t('kanban.rdrTestFailed'),
-        description: t('kanban.rdrSelectedWindowNotFound'),
-        variant: 'destructive'
-      });
-      return;
+    let targetIdentifier: number | string = directRdrIdentifier;
+    if (isWindowsPlatform) {
+      const selectedWindow = vsCodeWindows.find((windowInfo) => windowInfo.handle === selectedWindowPid);
+      if (!selectedWindow) {
+        toast({
+          title: t('kanban.rdrTestFailed'),
+          description: t('kanban.rdrSelectedWindowNotFound'),
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      targetIdentifier = selectedWindow.handle;
     }
 
     toast({
@@ -2667,7 +2704,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     });
 
     try {
-      const result = await window.electronAPI.sendTestRdrToWindow(selectedWindow.handle);
+      const result = await window.electronAPI.sendTestRdrToWindow(targetIdentifier);
 
       if (result.success) {
         toast({
@@ -2675,7 +2712,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           description: t('kanban.rdrTestSuccessDesc'),
           variant: 'default'
         });
-        console.log(`[KanbanBoard] Manual RDR test prompt sent to window handle ${selectedWindow.handle}`);
+        console.log(`[KanbanBoard] Manual RDR test prompt sent to ${typeof targetIdentifier === 'number' ? `window handle ${targetIdentifier}` : targetIdentifier}`);
       } else {
         toast({
           title: t('kanban.rdrTestFailed'),
@@ -2858,57 +2895,63 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
                   </TooltipContent>
                 </Tooltip>
 
-                {/* VS Code Window Selector for RDR */}
-                <div className="flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => { selectedWindowPidRef.current = null; setSelectedWindowPid(null); loadVsCodeWindows(); }}
-                        disabled={isLoadingWindows}
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                      >
-                        <RefreshCw className={cn("h-3 w-3", isLoadingWindows && "animate-spin")} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      <p>{t('kanban.rdrRefreshWindows')}</p>
-                    </TooltipContent>
-                  </Tooltip>
+                {isWindowsPlatform ? (
+                  <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { selectedWindowPidRef.current = null; setSelectedWindowPid(null); loadVsCodeWindows(); }}
+                          disabled={isLoadingWindows}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <RefreshCw className={cn("h-3 w-3", isLoadingWindows && "animate-spin")} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p>{t('kanban.rdrRefreshWindows')}</p>
+                      </TooltipContent>
+                    </Tooltip>
 
-                  <Select
-                    value={selectedWindowPid?.toString() ?? ''}
-                    onValueChange={handleWindowSelectionChange}
-                  >
-                    <SelectTrigger className="h-7 w-[140px] text-xs">
-                      <SelectValue placeholder={t('kanban.rdrSelectWindow')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vsCodeWindows.map((win) => (
-                        <SelectItem key={win.handle} value={win.handle.toString()}>
-                          <span className="truncate max-w-[120px]" title={win.title}>
-                            {(() => {
-                              // Strip "Visual Studio Code" and suffixes like "Untracked"
-                              const cleaned = win.title
-                                .replace(/ - Visual Studio Code.*$/, '')
-                                .trim();
-                              // "filename - FolderName" → take last segment as folder
-                              const parts = cleaned.split(' - ');
-                              const folder = parts.length >= 2 ? parts[parts.length - 1] : parts[0] || 'VS Code';
-                              return folder.length > 25 ? `${folder.substring(0, 25)}...` : folder;
-                            })()}
-                          </span>
-                        </SelectItem>
-                      ))}
-                      {vsCodeWindows.length === 0 && (
-                        <SelectItem value="none" disabled>
-                          {t('kanban.rdrNoWindows')}
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <Select
+                      value={selectedWindowPid?.toString() ?? ''}
+                      onValueChange={handleWindowSelectionChange}
+                    >
+                      <SelectTrigger className="h-7 w-[140px] text-xs">
+                        <SelectValue placeholder={t('kanban.rdrSelectWindow')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vsCodeWindows.map((win) => (
+                          <SelectItem key={win.handle} value={win.handle.toString()}>
+                            <span className="truncate max-w-[120px]" title={win.title}>
+                              {(() => {
+                                // Strip "Visual Studio Code" and suffixes like "Untracked"
+                                const cleaned = win.title
+                                  .replace(/ - Visual Studio Code.*$/, '')
+                                  .trim();
+                                // "filename - FolderName" → take last segment as folder
+                                const parts = cleaned.split(' - ');
+                                const folder = parts.length >= 2 ? parts[parts.length - 1] : parts[0] || 'VS Code';
+                                return folder.length > 25 ? `${folder.substring(0, 25)}...` : folder;
+                              })()}
+                            </span>
+                          </SelectItem>
+                        ))}
+                        {vsCodeWindows.length === 0 && (
+                          <SelectItem value="none" disabled>
+                            {t('kanban.rdrNoWindows')}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="flex flex-col text-[10px] leading-tight text-muted-foreground">
+                    <span className="uppercase tracking-wide">macOS direct send</span>
+                    <span>Terminal hosts paste only; submit manually if needed</span>
+                  </div>
+                )}
 
                 {/* Manual Test RDR Button */}
                 <Tooltip>
@@ -2917,14 +2960,14 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
                       variant="outline"
                       size="sm"
                       onClick={handleTestRdrPrompt}
-                      disabled={!projectId || !selectedWindowPid}
+                      disabled={!projectId || !canSendRdrDirect}
                       className="h-7 px-2 text-xs"
                     >
                       {t('kanban.rdrTestButton')}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
-                    <p>{selectedWindowPid ? t('kanban.rdrTestTooltip') : t('kanban.rdrSelectWindowFirst')}</p>
+                    <p>{canSendRdrDirect ? t('kanban.rdrTestTooltip') : t('kanban.rdrSelectWindowFirst')}</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -2935,10 +2978,10 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
                       variant="ghost"
                       size="sm"
                       onClick={handlePingRdr}
-                      disabled={!selectedWindowPid}
+                      disabled={!canSendRdrDirect}
                       className={cn(
                         "h-7 w-7 p-0",
-                        selectedWindowPid
+                        canSendRdrDirect
                           ? "text-yellow-500 hover:text-yellow-400"
                           : "text-muted-foreground/50"
                       )}
@@ -2947,7 +2990,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
-                    <p>{selectedWindowPid ? t('kanban.rdrPingTooltip') : t('kanban.rdrSelectWindowFirst')}</p>
+                    <p>{canSendRdrDirect ? t('kanban.rdrPingTooltip') : t('kanban.rdrSelectWindowFirst')}</p>
                   </TooltipContent>
                 </Tooltip>
 

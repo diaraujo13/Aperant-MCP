@@ -31,10 +31,10 @@ async function sendMessageWithActiveRdrMechanism(
   message: string,
 ): Promise<{ success: boolean; error?: string }> {
   const settings = (readSettingsFile() || {}) as Partial<AppSettings>;
-  const { DEFAULT_RDR_MECHANISMS } = await import('../../shared/constants/config');
+  const { DEFAULT_RDR_MECHANISMS, getDefaultRdrMechanismId } = await import('../../shared/constants/config');
 
   const mechanisms = settings.rdrMechanisms || DEFAULT_RDR_MECHANISMS;
-  const activeMechanismId = settings.activeMechanismId || mechanisms[0]?.id;
+  const activeMechanismId = settings.activeMechanismId || getDefaultRdrMechanismId(process.platform);
   const activeMechanism = mechanisms.find((mechanism) => mechanism.id === activeMechanismId) || mechanisms[0];
 
   if (activeMechanism) {
@@ -1899,25 +1899,23 @@ async function checkClaudeCodeBusy(): Promise<boolean> {
     // MCP Monitor only tracks user's Claude Code -> Auto-Claude MCP server connection
     // Task agents do NOT connect to this MCP server
     let mcpAvailable = false;
-    if (process.platform === 'win32') {
-      try {
-        const { mcpMonitor } = await import('../mcp-server');
-        if (mcpMonitor) {
-          mcpAvailable = true;
-          if (mcpMonitor.isBusy()) {
-            console.log('[RDR] BUSY: User Claude Code is actively calling MCP tools');
-            const status = mcpMonitor.getStatus();
-            console.log('[RDR]   MCP Status:', {
-              activeToolName: status.activeToolName,
-              timeSinceLastRequest: `${status.timeSinceLastRequest}ms`
-            });
-            return true;
-          }
-          console.log('[RDR] MCP Monitor: No active connections');
+    try {
+      const { mcpMonitor } = await import('../mcp-server');
+      if (mcpMonitor) {
+        mcpAvailable = true;
+        if (mcpMonitor.isBusy()) {
+          console.log('[RDR] BUSY: User Claude Code is actively calling MCP tools');
+          const status = mcpMonitor.getStatus();
+          console.log('[RDR]   MCP Status:', {
+            activeToolName: status.activeToolName,
+            timeSinceLastRequest: `${status.timeSinceLastRequest}ms`
+          });
+          return true;
         }
-      } catch (error) {
-        console.warn('[RDR] MCP monitor check skipped:', error);
+        console.log('[RDR] MCP Monitor: No active connections');
       }
+    } catch (error) {
+      console.warn('[RDR] MCP monitor check skipped:', error);
     }
 
     // 2. SECONDARY: Check OutputMonitor
@@ -2790,10 +2788,9 @@ export function registerRdrHandlers(agentManager?: AgentManager): void {
   // Check if Claude Code is currently busy (in a prompt loop)
   ipcMain.handle(
     IPC_CHANNELS.IS_CLAUDE_CODE_BUSY,
-    async (event, identifier: number | string): Promise<IPCResult<boolean>> => {
+    async (): Promise<IPCResult<boolean>> => {
       try {
-        const { isClaudeCodeBusy } = await import('../platform/windows/window-manager');
-        const busy = await isClaudeCodeBusy(identifier);
+        const busy = await checkClaudeCodeBusy();
         return { success: true, data: busy };
       } catch (error) {
         console.error('[RDR] Error checking busy state:', error);

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
 import { useTaskStore, loadTasks } from '../stores/task-store';
 import { useRoadmapStore } from '../stores/roadmap-store';
@@ -441,14 +441,13 @@ export function useIpcListeners(): void {
     // Rate limit auto-resume listener (after waiting for rate limit reset)
     const cleanupRateLimitAutoResume = window.electronAPI.onRateLimitAutoResume(
       (data: { taskId: string; projectId: string; source: string; profileId: string }) => {
-        // Only auto-resume if this is for the currently selected project
+        // The main process now performs the actual restart so auto-resume
+        // does not depend on the currently visible project in the renderer.
+        // Keep this listener for task list refresh only.
         if (isTaskForCurrentProject(data.projectId)) {
           console.log('[IPC] Rate limit auto-resume requested for task:', data.taskId);
           // Light refresh: cache already invalidated in main process
-          loadTasks(data.projectId).then(() => {
-            // Then trigger the task start
-            window.electronAPI.startTask(data.taskId);
-          });
+          loadTasks(data.projectId);
         }
       }
     );

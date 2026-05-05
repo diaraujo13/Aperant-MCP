@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   PROJECT_SET_RDR_ENABLED: 'project:setRdrEnabled',
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
+  GLOBAL_SEARCH: 'search:global',
   PROJECT_AUTOMATION_SETTINGS_CHANGED: 'project:automationSettingsChanged',
 
   // RDR / window assignment operations
@@ -30,6 +31,7 @@ export const IPC_CHANNELS = {
   // Task operations
   TASK_LIST: 'task:list',
   TASK_CREATE: 'task:create',
+  TASK_REFINE_DESCRIPTION: 'task:refineDescription',
   TASK_DELETE: 'task:delete',
   TASK_UPDATE: 'task:update',
   TASK_START: 'task:start',

@@ -117,6 +117,7 @@ import type {
   RoadmapGenerationStatus,
   PersistedRoadmapProgress
 } from './roadmap';
+import type { GlobalSearchResult } from './search';
 import type {
   LinearTeam,
   LinearProject,
@@ -223,6 +224,7 @@ export interface ElectronAPI {
   // Task operations
   getTasks: (projectId: string, options?: { forceRefresh?: boolean }) => Promise<IPCResult<Task[]>>;
   createTask: (projectId: string, title: string, description: string, metadata?: TaskMetadata) => Promise<IPCResult<Task>>;
+  refineTaskDescription: (description: string) => Promise<IPCResult<string>>;
   deleteTask: (taskId: string) => Promise<IPCResult>;
   updateTask: (taskId: string, updates: { title?: string; description?: string }) => Promise<IPCResult<Task>>;
   startTask: (taskId: string, options?: TaskStartOptions) => void;
@@ -257,6 +259,7 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  toggleTaskRdr: (taskId: string, disabled: boolean) => Promise<IPCResult<boolean>>;
 
   // RDR (Recover Debug Resend) operations
   triggerRdrProcessing: (projectId: string, taskIds: string[]) => Promise<IPCResult<{ processed: number }>>;
@@ -498,6 +501,7 @@ export interface ElectronAPI {
   selectDirectory: () => Promise<string | null>;
   createProjectFolder: (location: string, name: string, initGit: boolean) => Promise<IPCResult<CreateProjectFolderResult>>;
   getDefaultProjectLocation: () => Promise<string | null>;
+  searchAllProjects: (query: string) => Promise<IPCResult<GlobalSearchResult[]>>;
 
   // App info
   getAppVersion: () => Promise<string>;

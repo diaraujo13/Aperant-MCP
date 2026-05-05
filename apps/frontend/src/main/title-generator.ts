@@ -122,6 +122,45 @@ export class TitleGenerator extends EventEmitter {
    * @returns Promise resolving to the generated title or null on failure
    */
   async generateTitle(description: string): Promise<string | null> {
+    return this.runTextGeneration({
+      input: description,
+      prompt: this.createTitlePrompt(description),
+      systemPrompt: 'You generate short, concise task titles (3-7 words). Output ONLY the title, nothing else. No quotes, no explanation, no preamble.',
+      timeoutMs: 60000,
+      logLabel: 'title',
+      cleanOutput: (output) => this.cleanTitle(output)
+    });
+  }
+
+  /**
+   * Refine a task description into a clearer implementation brief.
+   */
+  async refineDescription(description: string): Promise<string | null> {
+    return this.runTextGeneration({
+      input: description,
+      prompt: this.createDescriptionRefinementPrompt(description),
+      systemPrompt: 'You refine software task descriptions. Keep the user intent intact, but rewrite it into a clearer, implementation-ready brief. Output ONLY the refined description in Markdown. Use short sections and bullet points when helpful. Do not add imaginary requirements.',
+      timeoutMs: 60000,
+      logLabel: 'description refinement',
+      cleanOutput: (output) => this.cleanRefinedDescription(output)
+    });
+  }
+
+  private async runTextGeneration({
+    input,
+    prompt,
+    systemPrompt,
+    timeoutMs,
+    logLabel,
+    cleanOutput,
+  }: {
+    input: string;
+    prompt: string;
+    systemPrompt: string;
+    timeoutMs: number;
+    logLabel: string;
+    cleanOutput: (output: string) => string;
+  }): Promise<string | null> {
     const autoBuildSource = this.getAutoBuildSourcePath();
 
     if (!autoBuildSource) {
@@ -144,11 +183,9 @@ export class TitleGenerator extends EventEmitter {
       level: 'info',
       data: { sourcePath: maskUserPaths(autoBuildSource) },
     });
+    const script = this.createGenerationScript(prompt, systemPrompt);
 
-    const prompt = this.createTitlePrompt(description);
-    const script = this.createGenerationScript(prompt);
-
-    debug('Generating title for description:', description.substring(0, 100) + '...');
+    debug(`Generating ${logLabel} for input:`, input.substring(0, 100) + '...');
 
     const autoBuildEnv = this.loadAutoBuildEnv();
     debug('Environment loaded', {
@@ -240,15 +277,16 @@ export class TitleGenerator extends EventEmitter {
       let output = '';
       let errorOutput = '';
       const timeout = setTimeout(() => {
-        console.warn('[TitleGenerator] Title generation timed out after 60s');
+        console.warn(`[TitleGenerator] ${logLabel} timed out after ${Math.round(timeoutMs / 1000)}s`);
         safeBreadcrumb({
           category: 'title-generator',
-          message: 'Process timed out after 60s',
+          message: `Process timed out during ${logLabel}`,
           level: 'warning',
         });
-        safeCaptureException(new Error('TitleGenerator: process timed out'), {
+        safeCaptureException(new Error(`TitleGenerator: ${logLabel} process timed out`), {
           contexts: {
             titleGenerator: {
+              operation: logLabel,
               pythonPath: maskUserPaths(resolvedPythonPath),
               sourcePath: maskUserPaths(autoBuildSource),
               venvReady,
@@ -258,7 +296,7 @@ export class TitleGenerator extends EventEmitter {
         });
         childProcess.kill();
         resolve(null);
-      }, 60000); // 60 second timeout for SDK initialization + API call
+      }, timeoutMs);
 
       childProcess.stdout?.on('data', (data: Buffer) => {
         output += data.toString('utf-8');
@@ -272,14 +310,14 @@ export class TitleGenerator extends EventEmitter {
         clearTimeout(timeout);
 
         if (code === 0 && output.trim()) {
-          const title = this.cleanTitle(output.trim());
-          debug('Generated title:', title);
+          const cleanedOutput = cleanOutput(output.trim());
+          debug(`Generated ${logLabel}:`, cleanedOutput);
           safeBreadcrumb({
             category: 'title-generator',
-            message: 'Title generated successfully',
+            message: `${logLabel} generated successfully`,
             level: 'info',
           });
-          resolve(title);
+          resolve(cleanedOutput);
         } else {
           // Check for rate limit
           const combinedOutput = `${output}\n${errorOutput}`;
@@ -306,7 +344,7 @@ export class TitleGenerator extends EventEmitter {
           }
 
           // Always log failures to help diagnose issues
-          console.warn('[TitleGenerator] Title generation failed', {
+          console.warn(`[TitleGenerator] ${logLabel} failed`, {
             code,
             errorOutput: errorOutput.substring(0, 500),
             output: output.substring(0, 200),
@@ -314,10 +352,11 @@ export class TitleGenerator extends EventEmitter {
           });
 
           safeCaptureException(
-            new Error(`TitleGenerator: process exited with code ${code}`),
+            new Error(`TitleGenerator: ${logLabel} process exited with code ${code}`),
             {
               contexts: {
                 titleGenerator: {
+                  operation: logLabel,
                   exitCode: code,
                   pythonPath: maskUserPaths(resolvedPythonPath),
                   sourcePath: maskUserPaths(autoBuildSource),
@@ -336,10 +375,11 @@ export class TitleGenerator extends EventEmitter {
 
       childProcess.on('error', (err) => {
         clearTimeout(timeout);
-        console.warn('[TitleGenerator] Process error:', err.message);
+        console.warn(`[TitleGenerator] ${logLabel} process error:`, err.message);
         safeCaptureException(err, {
           contexts: {
             titleGenerator: {
+              operation: logLabel,
               pythonPath: maskUserPaths(resolvedPythonPath),
               sourcePath: maskUserPaths(autoBuildSource),
               venvReady,
@@ -364,12 +404,29 @@ ${description}
 Title:`;
   }
 
+  private createDescriptionRefinementPrompt(description: string): string {
+    return `Refine the following software task description so it is clearer and more implementation-ready.
+
+Requirements:
+- Preserve the user's original intent.
+- Keep concrete details, file references, constraints, and acceptance criteria when present.
+- Improve clarity and structure.
+- Do not invent requirements or scope that the user did not imply.
+- Output only the refined description in Markdown.
+
+Original description:
+${description}
+
+Refined description:`;
+  }
+
   /**
    * Create the Python script to generate title using Claude Agent SDK
    */
-  private createGenerationScript(prompt: string): string {
+  private createGenerationScript(prompt: string, systemPrompt: string): string {
     // Escape the prompt for Python string - use JSON.stringify for safe escaping
     const escapedPrompt = JSON.stringify(prompt);
+    const escapedSystemPrompt = JSON.stringify(systemPrompt);
 
     return `
 import asyncio
@@ -385,7 +442,7 @@ async def generate_title():
         client = ClaudeSDKClient(
             options=ClaudeAgentOptions(
                 model="claude-haiku-4-5",
-                system_prompt="You generate short, concise task titles (3-7 words). Output ONLY the title, nothing else. No quotes, no explanation, no preamble.",
+                system_prompt=${escapedSystemPrompt},
                 max_turns=1,
             )
         )
@@ -409,8 +466,6 @@ async def generate_title():
                 title = response_text.strip()
                 # Remove any quotes
                 title = title.strip('"').strip("'")
-                # Take first line only
-                title = title.split('\\n')[0].strip()
                 if title:
                     print(title)
                     sys.exit(0)
@@ -436,6 +491,9 @@ asyncio.run(generate_title())
     // Remove quotes if present
     let cleaned = title.replace(/^["']|["']$/g, '');
 
+    // Keep only the first line
+    cleaned = cleaned.split('\n')[0].trim();
+
     // Remove any "Title:" or similar prefixes
     cleaned = cleaned.replace(/^(title|task|feature)[:\s]*/i, '');
 
@@ -447,6 +505,14 @@ asyncio.run(generate_title())
       cleaned = cleaned.substring(0, 97) + '...';
     }
 
+    return cleaned.trim();
+  }
+
+  private cleanRefinedDescription(description: string): string {
+    let cleaned = description.trim();
+    cleaned = cleaned.replace(/^```(?:markdown|md)?\s*/i, '');
+    cleaned = cleaned.replace(/\s*```$/i, '');
+    cleaned = cleaned.replace(/^refined description:\s*/i, '');
     return cleaned.trim();
   }
 }

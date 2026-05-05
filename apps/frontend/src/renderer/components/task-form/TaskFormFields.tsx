@@ -47,6 +47,7 @@ interface TaskFormFieldsProps {
   description: string;
   onDescriptionChange: (value: string) => void;
   descriptionPlaceholder?: string;
+  descriptionActions?: ReactNode;
   /** Optional custom content to render inside the description field (e.g., autocomplete popup) */
   descriptionOverlay?: ReactNode;
   /** Optional ref for the description textarea (used for @ mention autocomplete positioning) */
@@ -122,6 +123,7 @@ export function TaskFormFields({
   description,
   onDescriptionChange,
   descriptionPlaceholder,
+  descriptionActions,
   descriptionOverlay,
   descriptionRef: externalDescriptionRef,
   title,
@@ -317,9 +319,12 @@ export function TaskFormFields({
       <div className="space-y-6">
         {/* Description (Primary - Required) */}
         <div className="space-y-2">
-          <Label htmlFor={`${prefix}description`} className="text-sm font-medium text-foreground">
-            {t('tasks:form.description')} <span className="text-destructive">*</span>
-          </Label>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor={`${prefix}description`} className="text-sm font-medium text-foreground">
+              {t('tasks:form.description')} <span className="text-destructive">*</span>
+            </Label>
+            {descriptionActions}
+          </div>
           <div className="relative">
             {/* Optional overlay (e.g., @ mention highlighting) */}
             {descriptionOverlay}

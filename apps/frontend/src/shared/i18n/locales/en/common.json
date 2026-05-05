@@ -98,6 +98,27 @@
     "delete": "Delete",
     "settings": "Settings"
   },
+  "globalSearch": {
+    "title": "Global Search",
+    "description": "Search tasks and Insights conversation history across all projects.",
+    "button": "Search",
+    "shortcut": "Search all projects (Ctrl/Cmd+K)",
+    "placeholder": "Search all projects...",
+    "searching": "Searching...",
+    "empty": "Type to search across tasks and conversation history.",
+    "noMatches": "No matches found.",
+    "sections": {
+      "tasks": "Tasks",
+      "conversations": "Conversations"
+    },
+    "roles": {
+      "assistant": "Assistant",
+      "you": "You"
+    },
+    "badges": {
+      "insights": "Insights"
+    }
+  },
   "os": {
     "windows": "Windows",
     "macos": "macOS",

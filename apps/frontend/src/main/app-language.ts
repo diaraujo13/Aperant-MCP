@@ -13,6 +13,23 @@ import { app } from 'electron';
 // Updated via setAppLanguage() when renderer notifies of language change
 let currentAppLanguage = 'en';
 
+function normalizeLanguage(language: string | undefined): string {
+  if (!language) {
+    return 'en';
+  }
+
+  const normalized = language.toLowerCase();
+  if (normalized === 'pt-br' || normalized === 'pt_br' || normalized.startsWith('pt-') || normalized === 'pt') {
+    return 'pt-BR';
+  }
+
+  if (normalized.startsWith('fr')) {
+    return 'fr';
+  }
+
+  return 'en';
+}
+
 /**
  * Get the current app language.
  * Falls back to 'en' if not set.
@@ -26,7 +43,7 @@ export function getAppLanguage(): string {
  * Called by IPC handler when renderer changes language.
  */
 export function setAppLanguage(language: string): void {
-  currentAppLanguage = language;
+  currentAppLanguage = normalizeLanguage(language);
 }
 
 /**
@@ -37,8 +54,7 @@ export function initAppLanguage(): void {
   try {
     // app.getLocale() may not be available in test environments
     const osLocale = app?.getLocale?.() || 'en';
-    // Extract base language (e.g., 'en-US' -> 'en')
-    currentAppLanguage = osLocale.split('-')[0] || 'en';
+    currentAppLanguage = normalizeLanguage(osLocale);
   } catch {
     currentAppLanguage = 'en';
   }

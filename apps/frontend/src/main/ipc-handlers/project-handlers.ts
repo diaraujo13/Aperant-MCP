@@ -9,7 +9,8 @@ import type {
   InitializationResult,
   AutoBuildVersionInfo,
   GitStatus,
-  GitBranchDetail
+  GitBranchDetail,
+  GlobalSearchResult
 } from '../../shared/types';
 import { projectStore } from '../project-store';
 import {
@@ -242,6 +243,78 @@ function detectMainBranch(projectPath: string): string | null {
   return branches[0] || null;
 }
 
+function normalizeSearchTokens(query: string): string[] {
+  return query
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function matchesTokens(text: string, tokens: string[]): boolean {
+  const normalized = text.toLowerCase();
+  return tokens.every((token) => normalized.includes(token));
+}
+
+function buildSnippet(text: string, tokens: string[]): string {
+  const trimmed = text.replace(/\s+/g, ' ').trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const normalized = trimmed.toLowerCase();
+  const firstToken = tokens.find((token) => normalized.includes(token)) || tokens[0];
+  const matchIndex = normalized.indexOf(firstToken);
+  if (matchIndex === -1) {
+    return trimmed.slice(0, 180);
+  }
+
+  const start = Math.max(0, matchIndex - 60);
+  const end = Math.min(trimmed.length, matchIndex + 120);
+  const prefix = start > 0 ? '…' : '';
+  const suffix = end < trimmed.length ? '…' : '';
+  return `${prefix}${trimmed.slice(start, end)}${suffix}`;
+}
+
+function searchTasksInProject(project: Project, tokens: string[]): GlobalSearchResult[] {
+  const tasks = projectStore.getTasks(project.id);
+  const results: GlobalSearchResult[] = [];
+
+  for (const task of tasks) {
+    const subtaskText = task.subtasks.map((subtask) => subtask.description || subtask.title || '').join('\n');
+    const candidates: Array<{
+      field: 'title' | 'description' | 'specId' | 'subtask';
+      text: string;
+    }> = [
+      { field: 'title', text: task.title || '' },
+      { field: 'description', text: task.description || '' },
+      { field: 'specId', text: task.specId || '' },
+      { field: 'subtask', text: subtaskText }
+    ];
+
+    const matched = candidates.find((candidate) => candidate.text && matchesTokens(candidate.text, tokens));
+    if (!matched) {
+      continue;
+    }
+
+    results.push({
+      id: `task:${project.id}:${task.id}`,
+      type: 'task',
+      projectId: project.id,
+      projectName: project.name,
+      taskId: task.id,
+      specId: task.specId,
+      title: task.title || task.specId,
+      status: task.status,
+      snippet: buildSnippet(matched.text, tokens),
+      matchedField: matched.field,
+      updatedAt: new Date(task.updatedAt)
+    });
+  }
+
+  return results;
+}
+
 /**
  * Configure all Python-dependent services with the managed Python path
  */
@@ -350,6 +423,55 @@ export function registerProjectHandlers(
       }
 
       return { success: true, data: projects };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.GLOBAL_SEARCH,
+    async (_, query: string): Promise<IPCResult<GlobalSearchResult[]>> => {
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery) {
+        return { success: true, data: [] };
+      }
+
+      const tokens = normalizeSearchTokens(trimmedQuery);
+      const projects = projectStore.getProjects();
+      const results: GlobalSearchResult[] = [];
+
+      for (const project of projects) {
+        results.push(...searchTasksInProject(project, tokens));
+
+        const conversationMatches = await insightsService.searchSessions(project.path, trimmedQuery);
+        for (const match of conversationMatches) {
+          results.push({
+            id: `conversation:${project.id}:${match.sessionId}:${match.messageId}`,
+            type: 'conversation',
+            projectId: project.id,
+            projectName: project.name,
+            sessionId: match.sessionId,
+            sessionTitle: match.sessionTitle,
+            messageId: match.messageId,
+            role: match.role,
+            snippet: match.snippet,
+            updatedAt: match.updatedAt
+          });
+        }
+      }
+
+      results.sort((a, b) => {
+        const timeDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
+        if (timeDiff !== 0) {
+          return timeDiff;
+        }
+
+        if (a.type === b.type) {
+          return 0;
+        }
+
+        return a.type === 'task' ? -1 : 1;
+      });
+
+      return { success: true, data: results.slice(0, 100) };
     }
   );
 

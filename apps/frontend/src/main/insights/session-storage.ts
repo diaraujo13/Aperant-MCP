@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
+import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 import type { InsightsSession, InsightsSessionSummary } from '../../shared/types';
 import { InsightsPaths } from './paths';
@@ -126,6 +127,88 @@ export class SessionStorage {
     }
   }
 
+  async searchSessions(projectPath: string, query: string): Promise<Array<{
+    sessionId: string;
+    sessionTitle: string;
+    messageId: string;
+    role: 'user' | 'assistant';
+    snippet: string;
+    updatedAt: Date;
+  }>> {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return [];
+
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    const sessionsDir = this.paths.getSessionsDir(projectPath);
+    if (!existsSync(sessionsDir)) return [];
+
+    const matches: Array<{
+      sessionId: string;
+      sessionTitle: string;
+      messageId: string;
+      role: 'user' | 'assistant';
+      snippet: string;
+      updatedAt: Date;
+    }> = [];
+
+    try {
+      const files = (await readdir(sessionsDir)).filter(f => f.endsWith('.json'));
+
+      for (const file of files) {
+        try {
+          const content = await readFile(path.join(sessionsDir, file), 'utf-8');
+          const session = JSON.parse(content) as InsightsSession;
+          const sessionTitle = session.title || 'New Conversation';
+          const updatedAt = new Date(session.updatedAt);
+
+          const normalizedTitle = sessionTitle.toLowerCase();
+          const titleMatchesAll = tokens.every((token) => normalizedTitle.includes(token));
+
+          let pushedFromContent = false;
+          for (const message of session.messages || []) {
+            const rawContent = typeof message.content === 'string' ? message.content : '';
+            const normalizedContent = rawContent.toLowerCase();
+            const contentMatchesAll = tokens.every((token) => normalizedContent.includes(token));
+
+            if (!contentMatchesAll) {
+              continue;
+            }
+
+            matches.push({
+              sessionId: session.id,
+              sessionTitle,
+              messageId: message.id,
+              role: message.role === 'assistant' ? 'assistant' : 'user',
+              snippet: this.buildSnippet(rawContent, tokens),
+              updatedAt
+            });
+            pushedFromContent = true;
+          }
+
+          if (titleMatchesAll && !pushedFromContent) {
+            const firstMessage = session.messages?.[0];
+            if (firstMessage) {
+              matches.push({
+                sessionId: session.id,
+                sessionTitle,
+                messageId: firstMessage.id,
+                role: firstMessage.role === 'assistant' ? 'assistant' : 'user',
+                snippet: this.buildSnippet(sessionTitle, tokens),
+                updatedAt
+              });
+            }
+          }
+        } catch {
+          // Skip invalid session files
+        }
+      }
+    } catch {
+      return [];
+    }
+
+    return matches.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
   /**
    * Get current session ID for a project
    */
@@ -208,5 +291,25 @@ export class SessionStorage {
     } catch {
       // Ignore migration errors
     }
+  }
+
+  private buildSnippet(text: string, tokens: string[]): string {
+    const trimmed = text.replace(/\s+/g, ' ').trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    const normalized = trimmed.toLowerCase();
+    const firstToken = tokens.find((token) => normalized.includes(token)) || tokens[0];
+    const matchIndex = normalized.indexOf(firstToken);
+    if (matchIndex === -1) {
+      return trimmed.slice(0, 160);
+    }
+
+    const start = Math.max(0, matchIndex - 60);
+    const end = Math.min(trimmed.length, matchIndex + 120);
+    const prefix = start > 0 ? '…' : '';
+    const suffix = end < trimmed.length ? '…' : '';
+    return `${prefix}${trimmed.slice(start, end)}${suffix}`;
   }
 }

@@ -27,6 +27,11 @@ export const taskMock = {
     }
   }),
 
+  refineTaskDescription: async (description: string) => ({
+    success: true,
+    data: description.trim()
+  }),
+
   deleteTask: async () => ({ success: true }),
 
   updateTask: async (_taskId: string, updates: { title?: string; description?: string }) => ({

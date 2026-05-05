@@ -23,9 +23,12 @@ fn main() {
     info!("Aperant-MCP Tauri shell starting");
 
     let desktop_state: SharedDesktop = Arc::new(Mutex::new(DesktopState::default()));
+    let terminals: api::terminal::Terminals =
+        Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     tauri::Builder::default()
         .manage(desktop_state)
+        .manage(terminals)
         .invoke_handler(tauri::generate_handler![
             // Desktop domain (Phase 1)
             api::desktop::desktop_state_get,
@@ -84,6 +87,12 @@ fn main() {
             api::task::task_archive,
             api::task::task_unarchive,
             api::task::task_toggle_rdr,
+            // Terminal subsystem (Phase 4 spike — PTY foundation)
+            api::terminal::terminal_create,
+            api::terminal::terminal_input,
+            api::terminal::terminal_resize,
+            api::terminal::terminal_destroy,
+            api::terminal::terminal_check_alive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

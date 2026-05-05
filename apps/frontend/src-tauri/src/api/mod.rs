@@ -7,3 +7,4 @@ pub mod project;
 pub mod screenshot;
 pub mod settings;
 pub mod task;
+pub mod terminal;
