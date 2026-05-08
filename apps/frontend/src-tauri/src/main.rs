@@ -171,6 +171,14 @@ fn main() {
             api::profiles::claude_profile_verify_auth,
             api::profiles::claude_auto_switch_get,
             api::profiles::claude_auto_switch_update,
+            // API profiles domain (custom LLM endpoints)
+            api::profiles::api_profiles_get,
+            api::profiles::api_profile_save,
+            api::profiles::api_profile_update,
+            api::profiles::api_profile_delete,
+            api::profiles::api_profile_set_active,
+            api::profiles::api_profile_test_connection,
+            api::profiles::api_profile_discover_models,
             // Specs file watcher (Phase 6b — Kanban auto-refresh)
             api::watcher::task_watch_project,
             api::watcher::task_unwatch_project,

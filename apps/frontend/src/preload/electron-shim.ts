@@ -767,16 +767,19 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
 
   // API Profile management (custom endpoints)
   const apiProfilesAPI = {
-    getAPIProfiles: () => safeInvoke<unknown>('settings_get').then(r => ({
-      success: r.success,
-      data: (r.data as Record<string, unknown>)?.apiProfiles ?? { profiles: [], activeProfileId: null },
-    })),
-    saveAPIProfile: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    updateAPIProfile: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    deleteAPIProfile: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    setActiveAPIProfile: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    testConnection: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    discoverModels: () => Promise.resolve({ success: false, error: 'not_ported' }),
+    getAPIProfiles: () => safeInvoke<unknown>('api_profiles_get'),
+    saveAPIProfile: (profile: unknown) =>
+      safeInvoke<unknown>('api_profile_save', { profile }),
+    updateAPIProfile: (profile: unknown) =>
+      safeInvoke<unknown>('api_profile_update', { profile }),
+    deleteAPIProfile: (profileId: string) =>
+      safeInvoke<unknown>('api_profile_delete', { profileId }),
+    setActiveAPIProfile: (profileId: string | null) =>
+      safeInvoke<unknown>('api_profile_set_active', { profileId }),
+    testConnection: (baseUrl: string, apiKey: string) =>
+      safeInvoke<unknown>('api_profile_test_connection', { baseUrl, apiKey }),
+    discoverModels: (baseUrl: string, apiKey: string) =>
+      safeInvoke<unknown>('api_profile_discover_models', { baseUrl, apiKey }),
   };
 
   // RDR operations stubs (Windows-specific or Python backend)
