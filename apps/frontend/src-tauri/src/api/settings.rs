@@ -69,6 +69,12 @@ pub(crate) fn shallow_merge(base: &mut Value, patch: Value) {
     }
 }
 
+/// Public(crate) wrapper around `save_with_lock` for use by sibling modules
+/// (e.g. `api::profiles`) that need to write a patch into settings.json.
+pub(crate) fn write_settings_at_with_patch(path: &Path, patch: Value) -> AppResult<()> {
+    save_with_lock(path, patch)
+}
+
 /// Reads, merges, and writes settings under an exclusive cross-process file lock.
 /// The lock prevents the Electron build from racing the Tauri build during the
 /// parallel ship period — both implementations use the same lockfile path so
@@ -139,24 +145,91 @@ pub async fn get_sentry_config() -> AppResult<SentryConfig> {
     })
 }
 
-/// Returns the canonical `ToolDetectionResult` shape the renderer expects.
-/// Phase 2 round 4 will replace these with real detection.
-fn unknown_tool(reason: &str) -> Value {
+/// Resolves the first line of a command's stdout or stderr (whichever is
+/// non-empty) as a version string. Returns `None` if the command is not found
+/// or exits with a non-zero code and no output.
+fn probe_version(name: &str) -> Option<String> {
+    let output = std::process::Command::new(name)
+        .arg("--version")
+        .output()
+        .ok()?;
+    // Python < 3.4 writes to stderr; everything else uses stdout.
+    let bytes = if !output.stdout.is_empty() {
+        &output.stdout
+    } else {
+        &output.stderr
+    };
+    let line = String::from_utf8_lossy(bytes)
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if line.is_empty() { None } else { Some(line) }
+}
+
+/// Returns the full path of `name` by delegating to `which` (Unix) or
+/// `where` (Windows). Returns an empty string if not found.
+fn which_path(name: &str) -> String {
+    let finder = if cfg!(windows) { "where" } else { "which" };
+    std::process::Command::new(finder)
+        .arg(name)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+/// Tries each candidate in order and returns the first one found. The
+/// `ToolDetectionResult` shape matches what the renderer expects.
+fn detect_tool(candidates: &[&str]) -> Value {
+    for &name in candidates {
+        if let Some(version) = probe_version(name) {
+            let path = which_path(name);
+            return json!({
+                "found": true,
+                "source": "path",
+                "version": version,
+                "path": path,
+            });
+        }
+    }
     json!({
         "found": false,
         "source": "fallback",
-        "message": reason,
+        "message": "not found in PATH",
     })
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn settings_get_cli_tools_info() -> AppResult<IpcResult<Value>> {
-    Ok(IpcResult::ok(json!({
-        "python": unknown_tool("Detection deferred to Phase 2 round 4"),
-        "git":    unknown_tool("Detection deferred to Phase 2 round 4"),
-        "gh":     unknown_tool("Detection deferred to Phase 2 round 4"),
-        "claude": unknown_tool("Use checkClaudeCodeVersion for live detection"),
-    })))
+    // Run blocking probes in a dedicated thread so we don't stall the tokio executor.
+    let result = tokio::task::spawn_blocking(|| {
+        json!({
+            "python": detect_tool(&["python3", "python"]),
+            "git":    detect_tool(&["git"]),
+            "gh":     detect_tool(&["gh"]),
+            // claude detection is handled by checkClaudeCodeVersion which has
+            // richer version/path logic (multi-install support).
+            "claude": json!({
+                "found": false,
+                "source": "fallback",
+                "message": "Use checkClaudeCodeVersion for live detection",
+            }),
+        })
+    })
+    .await
+    .unwrap_or_else(|_| json!({}));
+
+    Ok(IpcResult::ok(result))
 }
 
 /// Reads `~/.claude.json` to determine if the user has completed Claude Code
@@ -189,9 +262,88 @@ pub async fn spellcheck_set_languages(_language: String) -> AppResult<IpcResult<
     Ok(IpcResult::ok(json!({ "success": true })))
 }
 
+/// Parses a `.env` file into a `HashMap<String, String>`, skipping blank
+/// lines and `#` comments. Values may be single- or double-quoted.
+fn parse_env_file(content: &str) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, val)) = line.split_once('=') {
+            let key = key.trim().to_string();
+            let val = val.trim().trim_matches('"').trim_matches('\'').to_string();
+            map.insert(key, val);
+        }
+    }
+    map
+}
+
+/// Returns the OAuth token configuration used by the Python backend.
+///
+/// Lookup order (mirrors the Electron production build):
+///   1. `<appData>/backend/.env` for `CLAUDE_CODE_OAUTH_TOKEN`
+///   2. `<autoBuildPath>/.env` if `autoBuildPath` is set in settings
+///   3. `settings.globalClaudeOAuthToken` as final fallback
 #[tauri::command(rename_all = "camelCase")]
 pub async fn autobuild_source_env_get() -> AppResult<IpcResult<Value>> {
-    Ok(IpcResult::ok(json!({})))
+    let settings_val = settings_path()
+        .ok()
+        .map(|p| read_settings_at(&p))
+        .unwrap_or_else(|| Value::Object(Default::default()));
+
+    // Candidate .env paths in priority order.
+    let app_data_env = dirs::config_dir().map(|d| d.join(APP_NAME).join("backend").join(".env"));
+    let auto_build_env = settings_val
+        .get("autoBuildPath")
+        .and_then(|v| v.as_str())
+        .map(|p| PathBuf::from(p).join(".env"));
+
+    let mut has_claude_token = false;
+    let mut claude_oauth_token: Option<String> = None;
+    let mut source_path: Option<String> = None;
+    let mut env_exists = false;
+
+    for candidate in [app_data_env.as_deref(), auto_build_env.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        if candidate.exists() {
+            env_exists = true;
+            source_path = Some(candidate.to_string_lossy().into_owned());
+            if let Ok(content) = fs::read_to_string(candidate) {
+                let vars = parse_env_file(&content);
+                if let Some(token) = vars.get("CLAUDE_CODE_OAUTH_TOKEN") {
+                    if !token.is_empty() {
+                        claude_oauth_token = Some(token.clone());
+                        has_claude_token = true;
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    // Global token fallback from settings.json.
+    if !has_claude_token {
+        if let Some(token) = settings_val
+            .get("globalClaudeOAuthToken")
+            .and_then(|v| v.as_str())
+            .filter(|t| !t.is_empty())
+        {
+            claude_oauth_token = Some(token.to_string());
+            has_claude_token = true;
+        }
+    }
+
+    Ok(IpcResult::ok(json!({
+        "hasClaudeToken": has_claude_token,
+        "claudeOAuthToken": claude_oauth_token,
+        "sourcePath": source_path,
+        "envExists": env_exists,
+    })))
 }
 
 #[cfg(test)]

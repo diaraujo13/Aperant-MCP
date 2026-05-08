@@ -28,7 +28,7 @@ const isElectron = typeof window !== 'undefined' && window.electronAPI !== undef
  * Create mock electronAPI for browser
  * Aggregates all mock implementations from separate modules
  */
-const browserMockAPI: ElectronAPI = {
+const browserMockAPI = {
   // Project Operations
   ...projectMock,
 
@@ -173,20 +173,20 @@ const browserMockAPI: ElectronAPI = {
     }
   }),
 
-  saveAPIProfile: async (profile) => ({
+  saveAPIProfile: async (profile: unknown) => ({
     success: true,
     data: {
       id: `mock-profile-${Date.now()}`,
-      ...profile,
+      ...(profile as object),
       createdAt: Date.now(),
       updatedAt: Date.now()
     }
   }),
 
-  updateAPIProfile: async (profile) => ({
+  updateAPIProfile: async (profile: unknown) => ({
     success: true,
     data: {
-      ...profile,
+      ...(profile as object),
       updatedAt: Date.now()
     }
   }),
@@ -380,7 +380,7 @@ const browserMockAPI: ElectronAPI = {
   }),
 
   // MCP Server Health Check Operations
-  checkMcpHealth: async (server) => ({
+  checkMcpHealth: async (server: { id: string }) => ({
     success: true,
     data: {
       serverId: server.id,
@@ -389,7 +389,7 @@ const browserMockAPI: ElectronAPI = {
       checkedAt: new Date().toISOString()
     }
   }),
-  testMcpConnection: async (server) => ({
+  testMcpConnection: async (server: { id: string }) => ({
     success: true,
     data: {
       serverId: server.id,
@@ -428,8 +428,40 @@ const browserMockAPI: ElectronAPI = {
   getUsageState: async () => ({ success: false, error: 'Not available in browser mode' }),
   getRdrState: async () => ({ success: false, error: 'Not available in browser mode' }),
   forceUsageFetch: async () => ({ success: false, error: 'Not available in browser mode' }),
-  sendTestRdr: async () => ({ success: false, error: 'Not available in browser mode' })
-};
+  sendTestRdr: async () => ({ success: false, error: 'Not available in browser mode' }),
+
+  // RDR window assignment
+  getAssignedWindow: async () => ({ success: true, data: null }),
+  setAssignedWindow: async () => ({ success: false, error: 'Not available in browser mode' }),
+
+  // Rate limit wait
+  onRateLimitAutoResume: () => () => {},
+  startRateLimitWait: async () => ({ success: false, error: 'Not available in browser mode' }),
+  cancelRateLimitWait: async () => ({ success: false, error: 'Not available in browser mode' }),
+  onRateLimitWaitProgress: () => () => {},
+  onRateLimitWaitComplete: () => () => {},
+
+  // Task lifecycle events
+  onTaskStatusChanged: () => () => {},
+  onTaskRegressionDetected: () => () => {},
+  onTaskAutoRefresh: () => () => {},
+  onDebugEvent: () => () => {},
+
+  // Activity tracking
+  recordActivity: () => {},
+
+  // HuggingFace
+  detectHuggingFaceRepo: async () => ({ success: false, error: 'Not available in browser mode' }),
+  checkHuggingFaceCli: async () => ({ success: false, error: 'Not available in browser mode' }),
+  checkHuggingFaceAuth: async () => ({ success: false, error: 'Not available in browser mode' }),
+  getHuggingFaceToken: async () => ({ success: false, error: 'Not available in browser mode' }),
+  huggingFaceLogin: async () => ({ success: false, error: 'Not available in browser mode' }),
+  huggingFaceLoginWithToken: async () => ({ success: false, error: 'Not available in browser mode' }),
+  installHuggingFaceCli: async () => ({ success: false, error: 'Not available in browser mode' }),
+
+  // stopTask with options
+  stopRateLimitWait: async () => ({ success: false, error: 'Not available in browser mode' }),
+} as unknown as ElectronAPI;
 
 /**
  * Initialize browser mock if not running in Electron

@@ -40,7 +40,7 @@ const OAUTH_FALLBACK: AuthStatus = {
   badgeColor: 'bg-orange-500/10 text-orange-500 border-orange-500/20 hover:bg-orange-500/15',
 };
 
-function getHeaderProviderLabel(provider: HeaderProvider, t: (key: string, options?: unknown) => string): string {
+function getHeaderProviderLabel(provider: HeaderProvider, t: (key: string, options?: Record<string, unknown>) => string): string {
   switch (provider) {
     case 'openai':
       return t('common:usage.providerOpenAI', { defaultValue: 'OpenAI Codex' });

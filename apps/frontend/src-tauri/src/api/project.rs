@@ -47,7 +47,7 @@ impl Store {
             .unwrap_or_default()
     }
 
-    fn set_projects(&mut self, projects: Vec<Value>) {
+    pub(crate) fn set_projects(&mut self, projects: Vec<Value>) {
         let map = self.ensure_object();
         map.insert("projects".to_string(), Value::Array(projects));
     }
@@ -443,6 +443,105 @@ pub async fn kanban_preferences_save(
         Ok(())
     })?;
     Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn project_env_get(project_id: String) -> AppResult<IpcResult<Value>> {
+    let store_path = store_path()?;
+    let store = read_store_at(&store_path);
+    let project = store.projects().into_iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
+
+    let Some(proj) = project else {
+        return Ok(IpcResult { success: false, data: None, error: Some("project_not_found".to_string()) });
+    };
+
+    // EnvConfig is stored under project.settings.envConfig
+    let env_config = proj.get("settings")
+        .and_then(|s| s.get("envConfig"))
+        .cloned()
+        .unwrap_or_else(|| json!({
+            "claudeAuthStatus": "not_configured",
+            "linearEnabled": false,
+            "githubEnabled": false,
+            "gitlabEnabled": false,
+            "huggingfaceEnabled": false,
+        }));
+
+    Ok(IpcResult::ok(env_config))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn project_env_update(project_id: String, config: Value) -> AppResult<IpcResult<()>> {
+    mutate_store(|store| {
+        let mut projects = store.projects();
+        let found = projects.iter_mut().find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
+
+        let Some(proj) = found else {
+            return Err(AppError::new("project_not_found", format!("No project with id {project_id}")));
+        };
+
+        // Merge into project.settings.envConfig
+        if let Some(obj) = proj.as_object_mut() {
+            let settings = obj.entry("settings".to_string()).or_insert_with(|| json!({}));
+            if let Some(settings_obj) = settings.as_object_mut() {
+                let env_config = settings_obj.entry("envConfig".to_string()).or_insert_with(|| json!({}));
+                if let (Some(ec_obj), Some(cfg_obj)) = (env_config.as_object_mut(), config.as_object()) {
+                    for (k, v) in cfg_obj {
+                        ec_obj.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+
+        store.set_projects(projects);
+        Ok(())
+    })?;
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn project_initialize(project_id: String) -> AppResult<IpcResult<Value>> {
+    let store_path = store_path()?;
+    let store = read_store_at(&store_path);
+    let proj = store.projects().into_iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
+
+    let Some(proj) = proj else {
+        return Ok(IpcResult { success: false, data: None, error: Some("project_not_found".to_string()) });
+    };
+
+    let proj_path = proj.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    // Create .auto-claude/specs directory if it doesn't exist
+    let specs_dir = PathBuf::from(&proj_path).join(".auto-claude/specs");
+    let _ = fs::create_dir_all(&specs_dir);
+
+    let is_git = PathBuf::from(&proj_path).join(".git").exists();
+
+    Ok(IpcResult::ok(json!({
+        "projectId": project_id,
+        "path": proj_path,
+        "isGitRepo": is_git,
+        "specsDir": specs_dir.to_string_lossy(),
+        "initialized": true,
+    })))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn project_check_version(project_id: String) -> AppResult<IpcResult<Value>> {
+    // Stub: version check requires Python backend
+    let store_path = store_path()?;
+    let store = read_store_at(&store_path);
+    let _proj = store.projects().into_iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
+
+    Ok(IpcResult::ok(json!({
+        "currentVersion": "0.0.0",
+        "latestVersion": "0.0.0",
+        "needsUpdate": false,
+        "source": "tauri-stub",
+    })))
 }
 
 #[cfg(test)]

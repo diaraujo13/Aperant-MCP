@@ -27,7 +27,7 @@ use tracing::{info, warn};
 
 /// One live PTY. Holds the master side (for I/O), the child handle (so we
 /// can kill it), and a writer that stays open across input calls.
-struct Terminal {
+pub(crate) struct Terminal {
     /// Tokio task that copies bytes from the PTY into renderer events.
     /// Aborted on destroy so we don't leak the read loop.
     reader_task: tokio::task::JoinHandle<()>,

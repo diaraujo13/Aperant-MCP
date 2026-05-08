@@ -294,7 +294,22 @@
     "maxImagesError": "Maximum of {{count}} images allowed",
     "invalidTypeError": "Invalid image type. Allowed: {{types}}",
     "removeImage": "Remove image",
-    "processingError": "Failed to process image"
+    "processingError": "Failed to process image",
+    "quickActions": "Quick:",
+    "qa": {
+      "simplify": "Simplify code",
+      "simplifyTemplate": "Simplify the code: remove duplication and reduce unnecessary complexity.",
+      "tests": "Add tests",
+      "testsTemplate": "Add unit tests to cover the main cases and edge cases.",
+      "implement": "Implement",
+      "implementTemplate": "Implement the functionality as specified in the requirements.",
+      "fixError": "Fix error",
+      "fixErrorTemplate": "Fix the error found in the output.",
+      "refactor": "Refactor",
+      "refactorTemplate": "Refactor for better readability and maintainability.",
+      "performance": "Improve perf",
+      "performanceTemplate": "Optimize performance: identify and eliminate bottlenecks."
+    }
   },
   "review": {
     "mergeTooltip": "Merges changes from the task's worktree branch back to your base branch. AI will resolve any conflicts. You can then choose whether to keep or remove the worktree."

@@ -294,7 +294,22 @@
     "maxImagesError": "Maximum de {{count}} images autorisées",
     "invalidTypeError": "Type d'image invalide. Autorisés : {{types}}",
     "removeImage": "Supprimer l'image",
-    "processingError": "Échec du traitement de l'image"
+    "processingError": "Échec du traitement de l'image",
+    "quickActions": "Rapide :",
+    "qa": {
+      "simplify": "Simplifier le code",
+      "simplifyTemplate": "Simplifiez le code : supprimez la duplication et réduisez la complexité inutile.",
+      "tests": "Ajouter des tests",
+      "testsTemplate": "Ajoutez des tests unitaires pour couvrir les cas principaux et les cas limites.",
+      "implement": "Implémenter",
+      "implementTemplate": "Implémentez la fonctionnalité conformément aux exigences.",
+      "fixError": "Corriger l'erreur",
+      "fixErrorTemplate": "Corrigez l'erreur trouvée dans la sortie.",
+      "refactor": "Refactoriser",
+      "refactorTemplate": "Refactorisez pour améliorer la lisibilité et la maintenabilité.",
+      "performance": "Améliorer perf",
+      "performanceTemplate": "Optimisez les performances : identifiez et éliminez les goulots d'étranglement."
+    }
   },
   "review": {
     "mergeTooltip": "Fusionne les changements de la branche worktree de la tâche vers votre branche de base. L'IA résoudra les conflits éventuels. Vous pourrez ensuite choisir de conserver ou de supprimer le worktree."

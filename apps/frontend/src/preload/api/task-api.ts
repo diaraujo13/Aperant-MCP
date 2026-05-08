@@ -132,6 +132,7 @@ export interface TaskAPI {
     newStatus: string;
     timestamp: string;
   }) => void) => () => void;
+  onTaskAutoRefresh: (callback: (data: { reason: string; projectId: string; specId: string }) => void) => () => void;
 
   // Task Phase Logs
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
@@ -152,6 +153,8 @@ export interface TaskAPI {
   getVSCodeWindows: () => Promise<IPCResult<Array<{ handle: number; title: string; processId: number }>>>;
   sendRdrToWindow: (identifier: number | string, message: string) => Promise<IPCResult<{ success: boolean; error?: string }>>;
   sendTestRdrToWindow: (identifier: number | string) => Promise<IPCResult<{ success: boolean; error?: string }>>;
+  getAssignedWindow: (projectId: string) => Promise<IPCResult<AssignedWindow | null>>;
+  setAssignedWindow: (projectId: string, window: { handle: number; processId: number; title: string }) => Promise<IPCResult<AssignedWindow>>;
 
   // Detailed RDR batch info for auto-send
   getRdrBatchDetails: (projectId: string) => Promise<IPCResult<RdrBatchDetails>>;

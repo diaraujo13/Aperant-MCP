@@ -73,7 +73,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onNewTaskClick?: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   isRefreshing?: boolean;
 }
 
@@ -82,7 +82,7 @@ interface DroppableColumnProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => unknown;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   isOver: boolean;
   onAddClick?: () => void;
   onArchiveAll?: () => void;
@@ -1646,7 +1646,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
     // If dragging an archived task, unarchive it first
     if (task?.metadata?.archivedAt) {
-      await window.electron.ipcRenderer.invoke('TASK_UNARCHIVE', {
+      await (window.electron as { ipcRenderer: { invoke: (...args: unknown[]) => Promise<unknown> } }).ipcRenderer.invoke('TASK_UNARCHIVE', {
         projectId,
         taskIds: [task.id]
       });
