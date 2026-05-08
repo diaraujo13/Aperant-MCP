@@ -1062,6 +1062,13 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     ...terminalExtAPI,
     ...pythonBackendStubAPI,
     github: githubAPI,
+    queue: {
+      getRunningTasksByProfile: () =>
+        Promise.resolve({ success: true, data: { byProfile: {}, total: 0 } }),
+      onQueueProfileSwapped: (_cb: unknown) => () => {},
+      onQueueSessionCaptured: (_cb: unknown) => () => {},
+      onQueueBlockedNoProfiles: (_cb: unknown) => () => {},
+    },
     recordActivity: (source: string) => {
       void invoke('activity_record', { source }).catch(() => {});
     },
@@ -1076,24 +1083,6 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       const name = String(prop);
       if (name in target) {
         return target[name];
-      }
-      // Sub-namespace (e.g., window.electronAPI.queue) — recursive proxy
-      if (name === 'queue') {
-        return new Proxy(
-          {},
-          {
-            get(_t, sub) {
-              const subName = String(sub);
-              const fullName = `${name}.${subName}`;
-              if (!stubbedMethods.has(fullName)) {
-                stubbedMethods.add(fullName);
-                // eslint-disable-next-line no-console
-                console.debug(`[shim] stub: ${fullName}`);
-              }
-              return makeStub(subName);
-            },
-          }
-        );
       }
       if (!stubbedMethods.has(name)) {
         stubbedMethods.add(name);
