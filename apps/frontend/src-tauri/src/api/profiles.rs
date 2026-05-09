@@ -267,6 +267,16 @@ pub async fn api_profile_save(profile: Value) -> AppResult<IpcResult<Value>> {
         let obj = p.as_object_mut()
             .ok_or_else(|| AppError::new("invalid_profile", "profile must be an object"))?;
 
+        // Validate `kind` discriminator (Phase 6d). Default to "anthropic" so
+        // legacy profiles round-trip with an explicit kind on disk.
+        match obj.get("kind").and_then(|v| v.as_str()) {
+            None => {
+                obj.insert("kind".into(), json!("anthropic"));
+            }
+            Some("anthropic") | Some("codex") => {}
+            Some(_) => return Err(AppError::new("invalid_kind", "kind must be 'anthropic' or 'codex'")),
+        }
+
         let id = obj
             .get("id")
             .and_then(|v| v.as_str())
@@ -295,6 +305,13 @@ pub async fn api_profile_update(profile: Value) -> AppResult<IpcResult<Value>> {
             .and_then(|v| v.as_str())
             .map(String::from)
             .ok_or_else(|| AppError::new("missing_id", "profile.id is required"))?;
+
+        // Validate `kind` if present (Phase 6d).
+        if let Some(k) = profile.get("kind").and_then(|v| v.as_str()) {
+            if k != "anthropic" && k != "codex" {
+                return Err(AppError::new("invalid_kind", "kind must be 'anthropic' or 'codex'"));
+            }
+        }
 
         let mut store = read_api_profiles();
         let profiles = store

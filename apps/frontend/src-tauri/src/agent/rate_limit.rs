@@ -8,6 +8,12 @@ const PATTERNS: &[&str] = &[
     "quota exceeded",
     "out of credits",
     "usage limit reached",
+    // OpenAI / Codex (Phase 6d)
+    "insufficient_quota",
+    "rate_limit_exceeded",
+    "you exceeded your current quota",
+    "tokens per min",
+    "requests per min",
 ];
 
 pub fn detect_rate_limit(line: &str) -> bool {
@@ -69,5 +75,47 @@ mod tests {
     #[test]
     fn negative_unrelated_number() {
         assert!(!detect_rate_limit("processed 42 of 100"));
+    }
+
+    // ── OpenAI / Codex (Phase 6d) ─────────────────────────────────────────────
+
+    #[test]
+    fn detects_openai_insufficient_quota() {
+        assert!(detect_rate_limit(
+            r#"{"error":{"code":"insufficient_quota"}}"#
+        ));
+    }
+
+    #[test]
+    fn detects_openai_rate_limit_exceeded_code() {
+        assert!(detect_rate_limit(
+            r#"{"error":{"code":"rate_limit_exceeded"}}"#
+        ));
+    }
+
+    #[test]
+    fn detects_openai_quota_message() {
+        assert!(detect_rate_limit(
+            "You exceeded your current quota, please check your plan"
+        ));
+    }
+
+    #[test]
+    fn detects_openai_tokens_per_min() {
+        assert!(detect_rate_limit(
+            "Limit: 30000 tokens per min (TPM) reached"
+        ));
+    }
+
+    #[test]
+    fn detects_openai_requests_per_min() {
+        assert!(detect_rate_limit("Limit: 500 requests per min (RPM)"));
+    }
+
+    #[test]
+    fn negative_openai_throughput_unrelated() {
+        assert!(!detect_rate_limit(
+            "processing throughput is 1200 tokens per second"
+        ));
     }
 }

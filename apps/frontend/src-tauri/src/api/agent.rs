@@ -33,7 +33,10 @@ use tracing::{info, warn};
 
 pub type SharedAgentManager = Arc<Mutex<AgentManager>>;
 
-const MAX_PROFILE_SWITCHES: usize = 3;
+/// Max total profile attempts per task (initial + 3 respawns). Tuned so a
+/// typical setup of 1 active + 1 fallback Anthropic + 1 Codex fallback
+/// exhausts cleanly.
+const MAX_PROFILE_ATTEMPTS: usize = 4;
 
 /// Resolves the Python interpreter to use for the given project root.
 fn resolve_python(project_path: &Path) -> Option<PathBuf> {
@@ -100,11 +103,31 @@ pub(crate) fn apply_profile_env(
     rp: &crate::agent::profile_env::ResolvedProfile,
 ) {
     use crate::agent::profile_env::ProfileKind;
+    // Codex env vars — stripped from non-Codex arms so a stale Codex run
+    // doesn't leak OPENAI_API_KEY / provider sentinel into Anthropic spawns.
+    const CODEX_VARS: &[&str] = &[
+        "OPENAI_API_KEY",
+        "AUTO_CLAUDE_PROVIDER",
+        "AUTO_CLAUDE_CODEX_MODEL",
+        "AUTO_CLAUDE_CODEX_BINARY",
+    ];
     match rp.profile_kind {
         ProfileKind::Api => {
             cmd.env_remove("CLAUDE_CODE_OAUTH_TOKEN");
+            for k in CODEX_VARS {
+                cmd.env_remove(k);
+            }
         }
         ProfileKind::OAuth => {
+            cmd.env_remove("ANTHROPIC_BASE_URL");
+            cmd.env_remove("ANTHROPIC_AUTH_TOKEN");
+            cmd.env_remove("ANTHROPIC_MODEL");
+            for k in CODEX_VARS {
+                cmd.env_remove(k);
+            }
+        }
+        ProfileKind::Codex => {
+            cmd.env_remove("CLAUDE_CODE_OAUTH_TOKEN");
             cmd.env_remove("ANTHROPIC_BASE_URL");
             cmd.env_remove("ANTHROPIC_AUTH_TOKEN");
             cmd.env_remove("ANTHROPIC_MODEL");
@@ -291,7 +314,7 @@ fn do_spawn(
                         // Remove the current entry so do_spawn can re-register.
                         agents_arc2.lock().await.remove(&tid);
 
-                        if attempted_c.len() >= MAX_PROFILE_SWITCHES {
+                        if attempted_c.len() >= MAX_PROFILE_ATTEMPTS {
                             let _ = app_c.emit("agent:state", json!({ "taskId": tid, "state": "rate_limited" }));
                             let _ = app_c.emit("agent:exit", json!({ "taskId": tid, "code": serde_json::Value::Null }));
                             return;
@@ -551,6 +574,103 @@ mod env_injection_tests {
                 "{} must be stripped when OAuth profile is active (got: {:?})",
                 k,
                 env.get(k)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn codex_profile_strips_anthropic_vars() {
+        std::env::set_var("ANTHROPIC_BASE_URL", "https://stale.example.com");
+        std::env::set_var("CLAUDE_CODE_OAUTH_TOKEN", "stale-oauth");
+
+        let rp = ResolvedProfile {
+            profile_id: "cx-1".into(),
+            profile_kind: ProfileKind::Codex,
+            env: vec![
+                ("OPENAI_API_KEY".into(), "sk-openai-test".into()),
+                ("AUTO_CLAUDE_PROVIDER".into(), "codex".into()),
+                ("AUTO_CLAUDE_CODEX_MODEL".into(), "gpt-5".into()),
+            ],
+        };
+
+        let dump = match run_env_dump(|c| apply_profile_env(c, &rp)).await {
+            Some(d) => d,
+            None => {
+                eprintln!("skipping: no python available");
+                return;
+            }
+        };
+        let env = parse_env(&dump);
+
+        std::env::remove_var("ANTHROPIC_BASE_URL");
+        std::env::remove_var("CLAUDE_CODE_OAUTH_TOKEN");
+
+        assert_eq!(
+            env.get("OPENAI_API_KEY").and_then(|v| v.as_str()),
+            Some("sk-openai-test")
+        );
+        assert_eq!(
+            env.get("AUTO_CLAUDE_PROVIDER").and_then(|v| v.as_str()),
+            Some("codex")
+        );
+        assert_eq!(
+            env.get("AUTO_CLAUDE_CODEX_MODEL").and_then(|v| v.as_str()),
+            Some("gpt-5")
+        );
+        for k in [
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_MODEL",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+        ] {
+            assert!(
+                !env.contains_key(k),
+                "{} must be stripped under Codex profile",
+                k
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn api_profile_strips_codex_vars() {
+        std::env::set_var("OPENAI_API_KEY", "stale-openai");
+        std::env::set_var("AUTO_CLAUDE_PROVIDER", "codex");
+        std::env::set_var("AUTO_CLAUDE_CODEX_MODEL", "stale-gpt");
+        std::env::set_var("AUTO_CLAUDE_CODEX_BINARY", "/stale/codex");
+
+        let rp = ResolvedProfile {
+            profile_id: "api-3".into(),
+            profile_kind: ProfileKind::Api,
+            env: vec![
+                ("ANTHROPIC_BASE_URL".into(), "https://api.example.com".into()),
+                ("ANTHROPIC_AUTH_TOKEN".into(), "sk-test".into()),
+            ],
+        };
+
+        let dump = match run_env_dump(|c| apply_profile_env(c, &rp)).await {
+            Some(d) => d,
+            None => {
+                eprintln!("skipping: no python available");
+                return;
+            }
+        };
+        let env = parse_env(&dump);
+
+        std::env::remove_var("OPENAI_API_KEY");
+        std::env::remove_var("AUTO_CLAUDE_PROVIDER");
+        std::env::remove_var("AUTO_CLAUDE_CODEX_MODEL");
+        std::env::remove_var("AUTO_CLAUDE_CODEX_BINARY");
+
+        for k in [
+            "OPENAI_API_KEY",
+            "AUTO_CLAUDE_PROVIDER",
+            "AUTO_CLAUDE_CODEX_MODEL",
+            "AUTO_CLAUDE_CODEX_BINARY",
+        ] {
+            assert!(
+                !env.contains_key(k),
+                "{} must be stripped under API (Anthropic) profile",
+                k
             );
         }
     }

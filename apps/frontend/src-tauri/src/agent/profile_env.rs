@@ -8,6 +8,7 @@ use serde_json::Value;
 pub enum ProfileKind {
     Api,
     OAuth,
+    Codex,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,13 @@ impl ProfileSource for DefaultProfileSource {
 
 pub fn resolve_profile_env(exclude: &[String]) -> Option<ResolvedProfile> {
     resolve_with(&DefaultProfileSource, exclude)
+}
+
+fn profile_kind_from_value(p: &Value) -> &'static str {
+    match p.get("kind").and_then(|v| v.as_str()) {
+        Some("codex") => "codex",
+        _ => "anthropic",
+    }
 }
 
 fn build_api_env(p: &Value) -> Option<(String, Vec<(String, String)>)> {
@@ -74,6 +82,32 @@ fn build_oauth_env(p: &Value) -> Option<(String, Vec<(String, String)>)> {
     ))
 }
 
+fn build_codex_env(p: &Value) -> Option<(String, Vec<(String, String)>)> {
+    let id = p.get("id").and_then(|v| v.as_str())?.to_string();
+    if id.is_empty() {
+        return None;
+    }
+    let api_key = p.get("apiKey").and_then(|v| v.as_str()).unwrap_or("");
+    if api_key.is_empty() {
+        return None;
+    }
+    let mut env = vec![
+        ("OPENAI_API_KEY".to_string(), api_key.to_string()),
+        ("AUTO_CLAUDE_PROVIDER".to_string(), "codex".to_string()),
+    ];
+    if let Some(model) = p.get("model").and_then(|v| v.as_str()) {
+        if !model.is_empty() {
+            env.push(("AUTO_CLAUDE_CODEX_MODEL".to_string(), model.to_string()));
+        }
+    }
+    if let Some(binary) = p.get("binary").and_then(|v| v.as_str()) {
+        if !binary.is_empty() {
+            env.push(("AUTO_CLAUDE_CODEX_BINARY".to_string(), binary.to_string()));
+        }
+    }
+    Some((id, env))
+}
+
 pub(crate) fn resolve_with<S: ProfileSource>(
     src: &S,
     exclude: &[String],
@@ -103,20 +137,24 @@ pub(crate) fn resolve_with<S: ProfileSource>(
         .filter(|s| !s.is_empty())
         .map(String::from);
 
-    // 1. Active API profile
-    if let Some(active_id) = &api_active {
-        if !exclude.iter().any(|e| e == active_id) {
-            if let Some(p) = api_list
-                .iter()
-                .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(active_id))
-            {
-                if let Some((id, env)) = build_api_env(p) {
-                    return Some(ResolvedProfile {
-                        profile_id: id,
-                        profile_kind: ProfileKind::Api,
-                        env,
-                    });
-                }
+    let active_profile = api_active.as_ref().and_then(|active_id| {
+        api_list
+            .iter()
+            .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(active_id))
+    });
+    let active_is_codex = active_profile
+        .map(|p| profile_kind_from_value(p) == "codex")
+        .unwrap_or(false);
+
+    // 1. Active API profile (only if NOT codex)
+    if let (Some(active_id), Some(p)) = (&api_active, active_profile) {
+        if !active_is_codex && !exclude.iter().any(|e| e == active_id) {
+            if let Some((id, env)) = build_api_env(p) {
+                return Some(ResolvedProfile {
+                    profile_id: id,
+                    profile_kind: ProfileKind::Api,
+                    env,
+                });
             }
         }
     }
@@ -139,8 +177,11 @@ pub(crate) fn resolve_with<S: ProfileSource>(
         }
     }
 
-    // 3. First non-excluded API profile in order
+    // 3. First non-excluded non-Codex API profile in order
     for p in &api_list {
+        if profile_kind_from_value(p) == "codex" {
+            continue;
+        }
         if let Some((id, env)) = build_api_env(p) {
             if !exclude.iter().any(|e| e == &id) {
                 return Some(ResolvedProfile {
@@ -159,6 +200,36 @@ pub(crate) fn resolve_with<S: ProfileSource>(
                 return Some(ResolvedProfile {
                     profile_id: id,
                     profile_kind: ProfileKind::OAuth,
+                    env,
+                });
+            }
+        }
+    }
+
+    // 5. Active API profile if it's Codex (so a user with Codex set as active
+    //    still gets it picked first within the Codex tier).
+    if let (Some(active_id), Some(p)) = (&api_active, active_profile) {
+        if active_is_codex && !exclude.iter().any(|e| e == active_id) {
+            if let Some((id, env)) = build_codex_env(p) {
+                return Some(ResolvedProfile {
+                    profile_id: id,
+                    profile_kind: ProfileKind::Codex,
+                    env,
+                });
+            }
+        }
+    }
+
+    // 6. First non-excluded Codex API profile in order
+    for p in &api_list {
+        if profile_kind_from_value(p) != "codex" {
+            continue;
+        }
+        if let Some((id, env)) = build_codex_env(p) {
+            if !exclude.iter().any(|e| e == &id) {
+                return Some(ResolvedProfile {
+                    profile_id: id,
+                    profile_kind: ProfileKind::Codex,
                     env,
                 });
             }
@@ -343,5 +414,117 @@ mod tests {
         };
         let r = resolve_with(&src, &[]).unwrap();
         assert_eq!(r.profile_id, "o2");
+    }
+
+    // ── Codex (Phase 6d) ──────────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_picks_active_codex() {
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "cx1", "kind": "codex", "apiKey": "sk-openai", "model": "gpt-5" }
+                ],
+                "activeProfileId": "cx1"
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &[]).unwrap();
+        assert_eq!(r.profile_id, "cx1");
+        assert_eq!(r.profile_kind, ProfileKind::Codex);
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "OPENAI_API_KEY" && v == "sk-openai"));
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "AUTO_CLAUDE_CODEX_MODEL" && v == "gpt-5"));
+    }
+
+    #[test]
+    fn resolve_picks_anthropic_before_codex() {
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "a1", "baseUrl": "https://x", "apiKey": "k1" },
+                    { "id": "cx1", "kind": "codex", "apiKey": "sk-openai" }
+                ],
+                "activeProfileId": "a1"
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &[]).unwrap();
+        assert_eq!(r.profile_id, "a1");
+        assert_eq!(r.profile_kind, ProfileKind::Api);
+    }
+
+    #[test]
+    fn resolve_falls_back_to_codex_when_anthropic_excluded() {
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "a1", "baseUrl": "https://x", "apiKey": "k1" },
+                    { "id": "cx1", "kind": "codex", "apiKey": "sk-openai" }
+                ],
+                "activeProfileId": "a1"
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &["a1".to_string()]).unwrap();
+        assert_eq!(r.profile_id, "cx1");
+        assert_eq!(r.profile_kind, ProfileKind::Codex);
+    }
+
+    #[test]
+    fn resolve_codex_skipped_when_apikey_missing() {
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "cx1", "kind": "codex", "apiKey": "" },
+                    { "id": "cx2", "kind": "codex", "apiKey": "sk-ok" }
+                ],
+                "activeProfileId": null
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &[]).unwrap();
+        assert_eq!(r.profile_id, "cx2");
+    }
+
+    #[test]
+    fn resolve_codex_env_includes_provider_sentinel() {
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "cx1", "kind": "codex", "apiKey": "sk-ok" }
+                ],
+                "activeProfileId": "cx1"
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &[]).unwrap();
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "AUTO_CLAUDE_PROVIDER" && v == "codex"));
+    }
+
+    #[test]
+    fn resolve_codex_with_binary_override() {
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "cx1", "kind": "codex", "apiKey": "sk-ok", "binary": "/usr/local/bin/codex" }
+                ],
+                "activeProfileId": "cx1"
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &[]).unwrap();
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "AUTO_CLAUDE_CODEX_BINARY" && v == "/usr/local/bin/codex"));
     }
 }
