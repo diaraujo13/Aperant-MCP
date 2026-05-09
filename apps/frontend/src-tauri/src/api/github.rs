@@ -1084,35 +1084,6 @@ pub async fn github_create_release(
 
 // ── pr review (Python subprocess) ────────────────────────────────────────────
 
-/// Resolve the Python interpreter for the given project path.
-/// Checks: <project>/apps/backend/.venv, <project>/.venv, then PATH.
-fn resolve_python_for_review(project_path: &Path) -> Option<std::path::PathBuf> {
-    let bin = if cfg!(windows) { "Scripts" } else { "bin" };
-    let exe = if cfg!(windows) { "python.exe" } else { "python" };
-    for base in &[
-        project_path.join("apps").join("backend").join(".venv"),
-        project_path.join(".venv"),
-    ] {
-        let p = base.join(bin).join(exe);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    for name in ["python3", "python"] {
-        let ok = std::process::Command::new(name)
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if ok {
-            return Some(std::path::PathBuf::from(name));
-        }
-    }
-    None
-}
-
 /// Locate the GitHub runner.py for a project.
 /// Checks: <project>/apps/backend/runners/github/runner.py, then <project>/runners/...
 fn find_runner(project_path: &Path) -> Option<std::path::PathBuf> {
@@ -1155,11 +1126,6 @@ pub async fn github_pr_review(
         None => return err("runner.py not found — is the backend installed?"),
     };
 
-    let python = match resolve_python_for_review(&proj_path) {
-        Some(p) => p,
-        None => return err("python not found"),
-    };
-
     let review_key = format!("pr-review:{}-{}", project_id, pr_number);
 
     // Obtain agents map without holding the manager lock across the spawn.
@@ -1178,17 +1144,34 @@ pub async fn github_pr_review(
         }
     }
 
-    let mut child = match tokio::process::Command::new(&python)
-        .arg(&runner)
-        .args(["--project", proj_path.to_str().unwrap_or(""), "review-pr", &pr_number.to_string()])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .current_dir(&proj_path)
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => return err(&format!("spawn failed: {e}")),
+    let args = vec![
+        "--project".to_string(),
+        proj_path.to_str().unwrap_or("").to_string(),
+        "review-pr".to_string(),
+        pr_number.to_string(),
+    ];
+
+    let spawn_result = crate::agent::spawn::spawn_python_with_profile(
+        &proj_path,
+        &runner,
+        &args,
+        &[],
+        Some(&proj_path),
+    )
+    .await;
+
+    let spawned = match spawn_result {
+        Ok(s) => s,
+        Err(crate::agent::spawn::SpawnError::PythonNotFound) => return err("python not found"),
+        Err(crate::agent::spawn::SpawnError::NoProfilesAvailable) => {
+            return err("no_profiles_available")
+        }
+        Err(crate::agent::spawn::SpawnError::SpawnFailed(e)) => {
+            return err(&format!("spawn failed: {e}"))
+        }
     };
+    let profile_id = spawned.profile_id.clone();
+    let mut child = spawned.child;
 
     let stdout = child.stdout.take().expect("stdout piped");
     let stderr = child.stderr.take().expect("stderr piped");
@@ -1203,7 +1186,7 @@ pub async fn github_pr_review(
                 task_id: review_key.clone(),
                 kill_tx,
                 started_at: std::time::SystemTime::now(),
-                current_profile_id: None,
+                current_profile_id: profile_id,
                 attempted_profile_ids: Vec::new(),
             },
         );

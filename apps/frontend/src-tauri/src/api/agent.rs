@@ -39,7 +39,7 @@ pub type SharedAgentManager = Arc<Mutex<AgentManager>>;
 const MAX_PROFILE_ATTEMPTS: usize = 4;
 
 /// Resolves the Python interpreter to use for the given project root.
-fn resolve_python(project_path: &Path) -> Option<PathBuf> {
+pub(crate) fn resolve_python(project_path: &Path) -> Option<PathBuf> {
     let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
     let py_name = if cfg!(windows) { "python.exe" } else { "python" };
 
@@ -77,7 +77,7 @@ fn resolve_python(project_path: &Path) -> Option<PathBuf> {
 
 /// Returns true if any profiles exist at all (used to decide whether to error
 /// out vs spawn unauthenticated).
-fn any_profiles_configured() -> bool {
+pub(crate) fn any_profiles_configured() -> bool {
     let api = crate::api::profiles::read_api_profiles();
     let oauth = crate::api::profiles::read_profiles();
     let api_count = api
