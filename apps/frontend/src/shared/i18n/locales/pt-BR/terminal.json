@@ -1,0 +1,50 @@
+{
+  "expand": {
+    "expand": "Expandir terminal",
+    "collapse": "Recolher terminal"
+  },
+  "resume": {
+    "pending": "Retomada Disponível",
+    "pendingTooltip": "Clique para retomar a sessão anterior do Claude",
+    "resumeAllSessions": "Retomar Todas"
+  },
+  "auth": {
+    "terminalTitle": "Autenticação: {{profileName}}",
+    "maxTerminalsReached": "Não foi possível abrir o terminal de autenticação: número máximo de terminais atingido. Feche um terminal primeiro."
+  },
+  "worktree": {
+    "create": "Worktree",
+    "createNew": "Nova Worktree",
+    "existing": "Worktrees de Terminal",
+    "taskWorktrees": "Worktrees de Tarefa",
+    "otherWorktrees": "Outras",
+    "createTitle": "Criar Worktree de Terminal",
+    "createDescription": "Crie um workspace isolado para este terminal. Todo o trabalho acontecerá no diretório da worktree.",
+    "name": "Nome da Worktree",
+    "namePlaceholder": "minha-feature",
+    "nameRequired": "O nome da worktree é obrigatório",
+    "nameInvalid": "O nome deve começar e terminar com uma letra ou número",
+    "nameHelp": "Letras minúsculas, números, hífens e sublinhados (espaços viram hífens)",
+    "associateTask": "Vincular à Tarefa",
+    "selectTask": "Selecione uma tarefa...",
+    "noTask": "Sem tarefa (worktree independente)",
+    "createBranch": "Criar Branch Git",
+    "branchHelp": "Cria a branch: {{branch}}",
+    "baseBranch": "Branch Base",
+    "selectBaseBranch": "Selecione a branch base...",
+    "searchBranch": "Buscar branches...",
+    "noBranchFound": "Nenhuma branch encontrada",
+    "useProjectDefault": "Usar padrão do projeto ({{branch}})",
+    "baseBranchHelp": "A branch da qual a worktree será criada",
+    "openInIDE": "Abrir na IDE",
+    "maxReached": "Máximo de 12 worktrees de terminal atingido",
+    "alreadyExists": "Já existe uma worktree com esse nome",
+    "searchPlaceholder": "Buscar worktrees...",
+    "noResults": "Nenhuma worktree encontrada",
+    "deleteTitle": "Excluir Worktree?",
+    "deleteDescription": "Isto excluirá permanentemente a worktree e sua branch. Quaisquer alterações não commitadas serão perdidas.",
+    "detached": "(destacada)",
+    "remotePushFailed": "Rastreamento Remoto Não Configurado",
+    "remotePushFailedDescription": "A worktree foi criada, mas a branch não pôde ser enviada ao remoto. Talvez seja necessário executar git push -u manualmente."
+  }
+}

@@ -1,0 +1,436 @@
+{
+  "refreshTasks": "Atualizar Tarefas",
+  "status": {
+    "backlog": "Backlog",
+    "queue": "Fila",
+    "todo": "A Fazer",
+    "in_progress": "Em Progresso",
+    "review": "Revisão",
+    "prCreated": "PR Criado",
+    "complete": "Concluída",
+    "archived": "Arquivada"
+  },
+  "actions": {
+    "start": "Iniciar",
+    "stop": "Parar",
+    "recover": "Recuperar",
+    "resume": "Retomar",
+    "archive": "Arquivar",
+    "delete": "Excluir",
+    "view": "Ver Detalhes",
+    "viewPR": "Ver PR",
+    "moveTo": "Mover para",
+    "taskActions": "Ações da tarefa",
+    "selectTask": "Selecionar tarefa: {{title}}"
+  },
+  "labels": {
+    "running": "Em execução",
+    "aiReview": "Revisão por IA",
+    "needsReview": "Precisa de revisão",
+    "pending": "Pendente",
+    "stuck": "Travada",
+    "incomplete": "Incompleta",
+    "recovering": "Recuperando...",
+    "needsRecovery": "Precisa de recuperação",
+    "needsResume": "Precisa ser retomada"
+  },
+  "reviewReason": {
+    "completed": "Concluída",
+    "hasErrors": "Possui Erros",
+    "qaIssues": "Problemas de QA",
+    "approvePlan": "Aprovar Plano",
+    "stopped": "Parada"
+  },
+  "tooltips": {
+    "archiveTask": "Arquivar tarefa",
+    "archiveAllDone": "Arquivar todas as tarefas concluídas",
+    "viewPR": "Abrir pull request no navegador"
+  },
+  "creation": {
+    "title": "Criar Nova Tarefa",
+    "description": "Descreva o que você quer construir",
+    "placeholder": "Descreva sua tarefa..."
+  },
+  "empty": {
+    "title": "Nenhuma tarefa ainda",
+    "description": "Crie sua primeira tarefa para começar"
+  },
+  "columns": {
+    "backlog": "Planejamento",
+    "queue": "Fila",
+    "in_progress": "Em Progresso",
+    "ai_review": "Revisão por IA",
+    "human_review": "Revisão Humana",
+    "done": "Concluídas",
+    "pr_created": "PR Criado",
+    "error": "Erro"
+  },
+  "kanban": {
+    "emptyBacklog": "Nenhuma tarefa planejada",
+    "emptyBacklogHint": "Adicione uma tarefa para começar",
+    "emptyQueue": "A fila está vazia",
+    "emptyQueueHint": "As tarefas esperarão aqui quando o limite de tarefas paralelas for atingido",
+    "emptyInProgress": "Nada em execução",
+    "emptyInProgressHint": "Inicie uma tarefa a partir de Planejamento",
+    "emptyAiReview": "Nenhuma tarefa em revisão",
+    "emptyAiReviewHint": "A IA revisará as tarefas concluídas",
+    "emptyHumanReview": "Nada para revisar",
+    "emptyHumanReviewHint": "As tarefas aguardam sua aprovação aqui",
+    "emptyDone": "Nenhuma tarefa concluída",
+    "emptyDoneHint": "As tarefas aprovadas aparecem aqui",
+    "emptyDefault": "Nenhuma tarefa",
+    "dropHere": "Solte aqui",
+    "showArchived": "Mostrar arquivadas",
+    "addTaskAriaLabel": "Adicionar nova tarefa ao backlog",
+    "queueAllAriaLabel": "Mover todas as tarefas para a fila",
+    "closeTaskDetailsAriaLabel": "Fechar detalhes da tarefa",
+    "editTask": "Editar tarefa",
+    "cannotEditWhileRunning": "Não é possível editar enquanto a tarefa está em execução",
+    "worktreeCleanupTitle": "Limpeza da Worktree",
+    "worktreeCleanupStaged": "Esta tarefa foi stageada e possui uma worktree. Deseja limpar a worktree?",
+    "worktreeCleanupNotStaged": "Esta tarefa possui uma worktree com alterações que ainda não foram mescladas. Exclua a worktree para marcar como concluída, ou cancele para revisar as alterações primeiro.",
+    "keepWorktree": "Manter Worktree",
+    "deleteWorktree": "Excluir Worktree e Marcar como Concluída",
+    "refreshTasks": "Atualizar Tarefas",
+    "queueSettings": "Configurações da Fila",
+    "orderSaveFailedTitle": "Reordenação não salva",
+    "orderSaveFailedDescription": "Sua mudança na ordem das tarefas foi aplicada, mas não pôde ser salva no armazenamento. Ela será perdida ao atualizar.",
+    "selectAll": "Selecionar tudo",
+    "deselectAll": "Desmarcar tudo",
+    "selectedCount": "{{count}} selecionadas",
+    "selectedCountOne": "{{count}} tarefa selecionada",
+    "selectedCountOther": "{{count}} tarefas selecionadas",
+    "createPRs": "Criar PRs",
+    "deleteSelected": "Excluir",
+    "deleteConfirmTitle": "Excluir Tarefas Selecionadas",
+    "deleteConfirmDescription": "Tem certeza de que deseja excluir permanentemente estas tarefas?",
+    "deleteWarning": "Esta ação não pode ser desfeita. Todos os arquivos da tarefa, incluindo a spec, o plano de implementação e qualquer código gerado, serão excluídos permanentemente do projeto.",
+    "tasksToDelete": "Tarefas a excluir",
+    "deleteConfirmButton": "Excluir {{count}} Tarefas",
+    "deleteSuccess": "{{count}} tarefa(s) excluída(s) com sucesso",
+    "deleteError": "Falha ao excluir algumas tarefas",
+    "clearSelection": "Limpar Seleção",
+    "collapseColumn": "Recolher coluna",
+    "expandColumn": "Expandir coluna",
+    "resizeColumn": "Redimensionar coluna",
+    "lockColumn": "Fixar largura da coluna",
+    "unlockColumn": "Desbloquear largura da coluna",
+    "columnLocked": "A largura da coluna está travada",
+    "expandAll": "Expandir todas as colunas",
+    "autoResume": "Retomada Automática",
+    "autoResumeHeader": "Sistema Aperant-MCP",
+    "arLimitReset": "Retomada Automática",
+    "arLimitResetSub": "(ao resetar o limite)",
+    "autoResumeTooltip": "Quando ativado, tarefas pausadas por limite de uso serão retomadas automaticamente quando o limite for redefinido.",
+    "pauseAll": "Pausar Tudo",
+    "resumeAll": "Retomar Tudo",
+    "pauseAllTooltip": "Interromper todas as tarefas em execução e impedir que novas tarefas iniciem",
+    "resumeAllTooltip": "Retomar todas as tarefas pausadas",
+    "rdrTooltip": "Recuperar, Depurar e Reenviar automaticamente: corrige tarefas travadas/com erro via Claude Manager MCP.",
+    "rdrPingTooltip": "Enviar mensagem RDR para a janela selecionada do VS Code.",
+    "rdrTestButton": "Testar",
+    "rdrTestTooltip": "Enviar um prompt de teste para a janela selecionada do VS Code.",
+    "rdrPingNoTasks": "Nenhuma Tarefa em Revisão Humana",
+    "rdrPingNoTasksDesc": "Não há tarefas em Revisão Humana para acionar.",
+    "rdrPinging": "Acionando RDR...",
+    "rdrPingingDesc": "Escrevendo arquivo de sinal com {{count}} tarefas...",
+    "rdrPingSuccess": "Sinal RDR Enviado",
+    "rdrPingSuccessDesc": "Arquivo de sinal gravado com {{count}} tarefas. Peça ao Claude Code para verificar os lotes de RDR.",
+    "rdrPingFailed": "Falha ao Acionar o RDR",
+    "rdrPingFailedDesc": "Falha ao gravar o arquivo de sinal. Verifique o console para mais detalhes.",
+    "rdrRefreshWindows": "Atualizar lista de janelas do VS Code",
+    "rdrSelectWindow": "Selecionar janela",
+    "rdrNoWindows": "Nenhuma janela do VS Code encontrada",
+    "rdrSelectWindowFirst": "Selecione primeiro uma janela do VS Code",
+    "rdrSelectedWindowNotFound": "Janela selecionada não encontrada.",
+    "rdrPaused": "Limitado — reinicia em {{minutes}} min",
+    "rdrPausedTooltip": "RDR pausado — limite da sessão atingido. Retoma automaticamente quando o limite for redefinido.",
+    "rdrWarning": "A sessão reinicia em {{minutes}} min",
+    "rdrWarningTooltip": "Uso da sessão acima de 80%. O RDR ainda está ativo e enviando.",
+    "rdrSending": "Enviando para o Claude Code...",
+    "rdrSendingDesc": "Enviando mensagem com {{count}} tarefas para a janela do VS Code...",
+    "rdrSendSuccess": "Mensagem Enviada",
+    "rdrSendSuccessDesc": "Mensagem RDR enviada para a janela do Claude Code.",
+    "rdrSendFailed": "Falha no Envio",
+    "rdrSendFailedDesc": "Falha ao enviar a mensagem para a janela do VS Code.",
+    "rdrTesting": "Enviando Prompt de Teste...",
+    "rdrTestingDesc": "Enviando um prompt de teste para a janela selecionada do VS Code...",
+    "rdrTestSuccess": "Prompt de Teste Enviado",
+    "rdrTestSuccessDesc": "Prompt de teste enviado para a janela selecionada do VS Code.",
+    "rdrTestFailed": "Falha ao Enviar Teste",
+    "rdrTestFailedDesc": "Falha ao enviar o prompt de teste para a janela selecionada do VS Code.",
+    "messagingHeader": "Mensageria",
+    "messagingNoConfigs": "Nenhuma configuração correspondente",
+    "messagingSettings": "Configurações de Mensageria",
+    "messagingDisabledGlobally": "(Desativado globalmente) ",
+    "messagingTag": "Tag",
+    "messagingTrigger": "Gatilho",
+    "messagingRdrMechanism": "Mecanismo RDR",
+    "messagingWindow": "Janela",
+    "rdrTaskRegression": "Regressão de Tarefa",
+    "rdrTaskRegressionDesc": "{{specId}} voltou para planejamento depois de ter sido iniciada",
+    "rdrInterventionTypes": {
+      "recovery": "Precisa de Recuperação",
+      "recoveryDesc": "A tarefa caiu ou apresentou erro - requer recuperação",
+      "resume": "Precisa Ser Retomada",
+      "resumeDesc": "A tarefa foi pausada (limite/incompleta) - pode ser retomada",
+      "stuck": "Travada",
+      "stuckDesc": "A tarefa voltou com trabalho incompleto - precisa de atenção",
+      "incomplete": "Incompleta",
+      "incompleteDesc": "A tarefa possui subtarefas pendentes - continue o trabalho"
+    }
+  },
+  "queue": {
+    "limitReached": "Limite de tarefas paralelas atingido ({{current}}/{{max}}). A tarefa foi movida para a fila.",
+    "movedToQueue": "Tarefa movida para a fila.",
+    "autoPromoted": "Tarefa promovida automaticamente da fila para Em Progresso.",
+    "capacityAvailable": "{{count}} vaga(s) disponível(is) em Em Progresso.",
+    "queueAll": "Adicionar Todas à Fila",
+    "queueAllSuccess": "{{count}} tarefas movidas para a fila.",
+    "settings": {
+      "title": "Configurações da Fila",
+      "description": "Configure o número máximo de tarefas que podem rodar em paralelo no quadro \"Em Progresso\"",
+      "maxParallelLabel": "Máximo de Tarefas Paralelas",
+      "minValueError": "Deve ser pelo menos 1",
+      "maxValueError": "Não pode exceder 10",
+      "hint": "Quando esse limite é atingido, novas tarefas esperarão na fila antes de ir para \"Em Progresso\"",
+      "saved": "Configurações da fila salvas",
+      "saveFailed": "Falha ao salvar as configurações da fila",
+      "retry": "Tente novamente"
+    }
+  },
+  "execution": {
+    "phases": {
+      "idle": "Ociosa",
+      "planning": "Planejando",
+      "coding": "Codando",
+      "rate_limit_paused": "Limitada",
+      "auth_failure_paused": "Autenticação Necessária",
+      "reviewing": "Revisando",
+      "fixing": "Corrigindo",
+      "complete": "Concluída",
+      "failed": "Falhou"
+    },
+    "labels": {
+      "interrupted": "Interrompida",
+      "progress": "Progresso",
+      "entry": "entrada",
+      "entries": "entradas"
+    },
+    "shortPhases": {
+      "plan": "Plano",
+      "code": "Código",
+      "qa": "QA"
+    }
+  },
+  "files": {
+    "title": "Arquivos",
+    "tab": "Arquivos",
+    "noSpecPath": "Nenhum arquivo de spec disponível",
+    "noFiles": "Nenhum arquivo encontrado",
+    "loading": "Carregando arquivos...",
+    "loadingContent": "Carregando conteúdo...",
+    "errorLoading": "Falha ao carregar os arquivos",
+    "errorLoadingContent": "Falha ao carregar o conteúdo do arquivo",
+    "retry": "Tentar novamente",
+    "selectFile": "Selecione um arquivo para ver seu conteúdo",
+    "openInIDE": "Abrir na IDE"
+  },
+  "metadata": {
+    "fastMode": "Rápido",
+    "severity": "severidade",
+    "pullRequest": "Pull Request",
+    "showMore": "Mostrar mais",
+    "showLess": "Mostrar menos"
+  },
+  "images": {
+    "removeImageAriaLabel": "Remover imagem {{filename}}",
+    "pasteHint": "Dica: cole capturas de tela diretamente com {{shortcut}} para adicionar imagens de referência."
+  },
+  "imagePreview": {
+    "close": "Fechar visualização",
+    "unavailable": "Imagem indisponível",
+    "description": "Visualização de {{filename}}",
+    "doubleClickHint": "Clique duas vezes para ampliar",
+    "lowResolution": "Pré-visualização em baixa resolução"
+  },
+  "notifications": {
+    "backgroundTaskTitle": "A tarefa continua em segundo plano",
+    "backgroundTaskDescription": "A tarefa ainda está em execução. Você pode reabrir este diálogo para acompanhar o progresso."
+  },
+  "wizard": {
+    "createTitle": "Criar Nova Tarefa",
+    "createDescription": "Descreva o que você quer construir. A IA analisará sua solicitação e criará uma especificação detalhada.",
+    "descriptionPlaceholder": "Descreva o recurso, correção de bug ou melhoria que você quer implementar. Seja o mais específico possível sobre requisitos, restrições e comportamento esperado. Digite @ para referenciar arquivos.",
+    "draftRestored": "Rascunho restaurado",
+    "startFresh": "Começar do Zero",
+    "hideFiles": "Ocultar Arquivos",
+    "browseFiles": "Explorar Arquivos",
+    "creating": "Criando...",
+    "createTask": "Criar Tarefa",
+    "worktreeNotice": {
+      "title": "Workspace Isolado",
+      "description": "Esta tarefa roda em uma worktree git isolada. Sua branch principal permanece segura até você decidir mesclar."
+    },
+    "gitOptions": {
+      "title": "Opções de Git (opcional)",
+      "baseBranchLabel": "Branch Base (opcional)",
+      "useProjectDefault": "Usar padrão do projeto",
+      "useProjectDefaultWithBranch": "Usar padrão do projeto ({{branch}})",
+      "searchBranches": "Buscar branches...",
+      "noBranchesFound": "Nenhuma branch encontrada",
+      "helpText": "Substitui a branch a partir da qual a worktree desta tarefa será criada. Deixe em branco para usar a branch padrão configurada no projeto.",
+      "useWorktreeLabel": "Usar workspace isolado (recomendado)",
+      "useWorktreeDescription": "Cria alterações em uma worktree git separada para revisão segura antes da mesclagem. Desative para construir diretamente no seu projeto (mais rápido, porém mais arriscado)."
+    },
+    "errors": {
+      "createFailed": "Falha ao criar a tarefa. Tente novamente.",
+      "startFailed": "Falha ao iniciar a tarefa"
+    }
+  },
+  "feedback": {
+    "dragDropHint": "Arraste e solte imagens ou cole capturas de tela",
+    "imageAdded": "Imagem adicionada com sucesso",
+    "maxImagesError": "Máximo de {{count}} imagens permitidas",
+    "invalidTypeError": "Tipo de imagem inválido. Permitidos: {{types}}",
+    "removeImage": "Remover imagem",
+    "processingError": "Falha ao processar a imagem",
+    "quickActions": "Rápido:",
+    "qa": {
+      "simplify": "Simplificar código",
+      "simplifyTemplate": "Simplifique o código: remova duplicação e reduza a complexidade desnecessária.",
+      "tests": "Adicionar testes",
+      "testsTemplate": "Adicione testes unitários para cobrir os casos principais e casos extremos.",
+      "implement": "Implementar",
+      "implementTemplate": "Implemente a funcionalidade conforme especificado nos requisitos.",
+      "fixError": "Corrigir erro",
+      "fixErrorTemplate": "Corrija o erro encontrado na saída.",
+      "refactor": "Refatorar",
+      "refactorTemplate": "Refatore para melhorar a legibilidade e a manutenibilidade.",
+      "performance": "Melhorar perf",
+      "performanceTemplate": "Otimize a performance: identifique e elimine gargalos."
+    }
+  },
+  "review": {
+    "mergeTooltip": "Mescla as alterações da branch da worktree da tarefa de volta para sua branch base. A IA resolverá quaisquer conflitos. Depois, você poderá decidir se deseja manter ou remover a worktree."
+  },
+  "edit": {
+    "title": "Editar Tarefa",
+    "description": "Atualize os detalhes da tarefa, incluindo título, descrição, classificação, imagens e configurações. As alterações serão salvas nos arquivos de spec.",
+    "saveChanges": "Salvar Alterações",
+    "errors": {
+      "updateFailed": "Falha ao atualizar a tarefa. Tente novamente."
+    }
+  },
+  "form": {
+    "description": "Descrição",
+    "descriptionPlaceholder": "Descreva o recurso, correção de bug ou melhoria que você quer implementar. Seja o mais específico possível sobre requisitos, restrições e comportamento esperado.",
+    "refineDescription": "Refinar descrição",
+    "refiningDescription": "Refinando...",
+    "imageAddedSuccess": "Imagem adicionada com sucesso!",
+    "taskTitle": "Título da Tarefa",
+    "titlePlaceholder": "Deixe em branco para gerar automaticamente a partir da descrição",
+    "titleHelpText": "Um título curto e descritivo será gerado automaticamente se ficar em branco.",
+    "provider": "Provedor",
+    "providerAuto": "Automático (usar conta ativa)",
+    "providerDescription": "Escolha qual conta usar para esta tarefa",
+    "classificationOptional": "Classificação (opcional)",
+    "requireReviewLabel": "Exigir revisão humana antes de codar",
+    "requireReviewDescription": "Quando ativado, você será convidado a revisar a spec e o plano de implementação antes do início da fase de código. Isso permite aprovar, solicitar alterações ou fornecer feedback.",
+    "fastModeLabel": "Modo Rápido",
+    "fastModeDescription": "Mesmo modelo Opus 4.6 com saída mais rápida. Custo por token maior.",
+    "fastModeNotice": "Requer \"uso extra\" ativado na sua assinatura Claude.",
+    "errors": {
+      "descriptionRequired": "Forneça uma descrição",
+      "refineFailed": "Falha ao refinar a descrição",
+      "maxImagesReached": "Máximo de 5 imagens permitido",
+      "invalidImageType": "Tipo de imagem inválido. Permitidos: PNG, JPEG, GIF, WebP",
+      "processPasteFailed": "Falha ao processar a imagem colada",
+      "processDropFailed": "Falha ao processar a imagem solta"
+    },
+    "classification": {
+      "category": "Categoria",
+      "selectCategory": "Selecione a categoria",
+      "priority": "Prioridade",
+      "selectPriority": "Selecione a prioridade",
+      "complexity": "Complexidade",
+      "selectComplexity": "Selecione a complexidade",
+      "impact": "Impacto",
+      "selectImpact": "Selecione o impacto",
+      "helpText": "Essas etiquetas ajudam a organizar e priorizar tarefas. São opcionais, mas úteis para filtragem.",
+      "values": {
+        "category": {
+          "feature": "Recurso",
+          "bug_fix": "Correção de Bug",
+          "refactoring": "Refatoração",
+          "documentation": "Docs",
+          "security": "Segurança"
+        },
+        "priority": {
+          "low": "Baixa",
+          "medium": "Média",
+          "high": "Alta",
+          "urgent": "Urgente"
+        },
+        "complexity": {
+          "trivial": "Trivial",
+          "small": "Pequena",
+          "medium": "Média",
+          "large": "Grande",
+          "complex": "Complexa"
+        },
+        "impact": {
+          "low": "Baixo Impacto",
+          "medium": "Médio Impacto",
+          "high": "Alto Impacto",
+          "critical": "Impacto Crítico"
+        }
+      }
+    }
+  },
+  "subtasks": {
+    "untitled": "Subtarefa sem título"
+  },
+  "bulkPR": {
+    "selectAllInColumn": "Selecionar todas as tarefas na coluna",
+    "deselectAllInColumn": "Desmarcar todas as tarefas",
+    "selectionMode": "Modo de seleção ativo",
+    "exitSelectionMode": "Sair do modo de seleção",
+    "noTasksToSelect": "Nenhuma tarefa disponível para selecionar",
+    "confirmBulkAction": "Confirmar ação em lote para {{count}} tarefas",
+    "processingTasks": "Processando tarefas selecionadas..."
+  },
+  "screenshot": {
+    "title": "Capturar Tela",
+    "description": "Selecione uma tela ou janela para capturar como imagem de referência",
+    "capture": "Capturar",
+    "capturing": "Capturando...",
+    "noSources": "Nenhuma tela ou janela encontrada",
+    "errors": {
+      "getSources": "Falha ao obter as fontes de captura",
+      "fetchSources": "Falha ao buscar as fontes de captura",
+      "capture": "Falha ao capturar a tela",
+      "captureFailed": "Falha ao capturar a tela"
+    },
+    "devMode": {
+      "title": "Captura de tela indisponível",
+      "description": "A captura de tela não está disponível em modo de desenvolvimento devido a restrições de permissão do sistema.",
+      "hint": "Use uma ferramenta externa de captura de tela e cole diretamente na descrição da tarefa com {{shortcut}}."
+    }
+  },
+  "deleteDialog": {
+    "title": "Excluir Tarefa",
+    "confirmMessage": "Tem certeza de que deseja excluir",
+    "destructiveWarning": "Esta ação não pode ser desfeita. Todos os arquivos da tarefa, incluindo a spec, o plano de implementação e qualquer código gerado, serão excluídos permanentemente do projeto.",
+    "checkingChanges": "Verificando alterações não commitadas...",
+    "uncommittedChanges": "A worktree desta tarefa possui {{count}} arquivo(s) não commitado(s)",
+    "uncommittedChangesHint": "Essas alterações não foram commitadas nem mescladas. Excluir esta tarefa descartará permanentemente todo o trabalho não commitado na worktree.",
+    "cancel": "Cancelar",
+    "deletePermanently": "Excluir Permanentemente",
+    "deleting": "Excluindo..."
+  },
+  "referenceImages": {
+    "title": "Imagens de Referência (opcional)",
+    "description": "Adicione referências visuais como capturas de tela ou designs para ajudar a IA a entender seus requisitos."
+  }
+}

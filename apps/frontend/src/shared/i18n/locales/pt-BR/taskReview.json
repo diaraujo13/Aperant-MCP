@@ -1,0 +1,136 @@
+{
+  "terminal": {
+    "openTerminal": "Abrir terminal",
+    "openInbuilt": "Abrir no Terminal Embutido",
+    "openExternal": "Abrir no Terminal Externo"
+  },
+  "merge": {
+    "branchHasNewCommits": "A branch {{branch}} tem {{count}} novo commit.",
+    "branchHasNewCommits_other": "A branch {{branch}} tem {{count}} novos commits.",
+    "branchHasNewCommitsSinceWorktree": "A branch {{branch}} tem {{count}} novo commit desde que esta worktree foi criada.",
+    "branchHasNewCommitsSinceWorktree_other": "A branch {{branch}} tem {{count}} novos commits desde que esta worktree foi criada.",
+    "filesNeedMerging": "{{count}} arquivo precisa ser mesclado.",
+    "filesNeedMerging_other": "{{count}} arquivos precisam ser mesclados.",
+    "filesNeedIntelligentMerging": "{{count}} arquivo precisará de mesclagem inteligente:",
+    "filesNeedIntelligentMerging_other": "{{count}} arquivos precisarão de mesclagem inteligente:",
+    "branchHasNewCommitsSinceBuild": "A branch {{branch}} tem {{count}} novo commit desde que este build começou.",
+    "branchHasNewCommitsSinceBuild_other": "A branch {{branch}} tem {{count}} novos commits desde que este build começou.",
+    "filesNeedAIMergeDueToRenames": "{{count}} arquivo precisa de mesclagem com IA devido a {{renameCount}} renomeação de arquivo.",
+    "filesNeedAIMergeDueToRenames_other": "{{count}} arquivos precisam de mesclagem com IA devido a {{renameCount}} renomeações de arquivo.",
+    "filesNeedAIMergeDueToRenamesPlural": "{{count}} arquivo precisa de mesclagem com IA devido a {{renameCount}} renomeações de arquivo.",
+    "filesNeedAIMergeDueToRenamesPlural_other": "{{count}} arquivos precisam de mesclagem com IA devido a {{renameCount}} renomeações de arquivo.",
+    "fileRenamesDetected": "{{count}} renomeação de arquivo detectada - a IA cuidará da mesclagem.",
+    "fileRenamesDetected_other": "{{count}} renomeações de arquivo detectadas - a IA cuidará da mesclagem.",
+    "filesRenamedOrMoved": "Arquivos podem ter sido renomeados ou movidos - a IA cuidará da mesclagem.",
+    "alreadyMergedTitle": "Alterações já estão na sua branch",
+    "alreadyMergedDescription": "Estas alterações parecem já existir na sua branch atual. Você pode marcar esta tarefa como concluída com segurança.",
+    "alreadyMergedTooltip": "As alterações da tarefa já estão presentes na sua branch. Marcar como concluída limpará a worktree sem mesclar.",
+    "matchingFiles": "Arquivos correspondentes",
+    "supersededTitle": "Alterações superadas",
+    "supersededDescription": "Sua branch atual tem uma versão mais nova dessas alterações. Considere descartar esta tarefa ou ver a comparação.",
+    "supersededCompareTooltip": "Veja uma comparação detalhada para entender como a branch atual difere das alterações desta tarefa.",
+    "supersededDiscardTooltip": "Remova a worktree desta tarefa, já que as alterações não são mais necessárias.",
+    "status": {
+      "branchDiverged": "Branch Divergiu",
+      "aiWillResolve": "A IA vai resolver",
+      "filesRenamed": "Arquivos Renomeados",
+      "branchBehind": "Branch Desatualizada",
+      "readyToMerge": "Pronta para mesclar",
+      "files": "arquivos",
+      "file": "arquivo",
+      "conflict": "conflito",
+      "conflicts": "conflitos",
+      "details": "Detalhes",
+      "refresh": "Atualizar",
+      "stageOnly": "Apenas stagear (revise na IDE antes de commitar)",
+      "discardBuild": "Descartar build"
+    },
+    "buttons": {
+      "stageWithAIMerge": "Stagear com Mesclagem por IA",
+      "mergeWithAI": "Mesclar com IA",
+      "stageTo": "Stagear em {{branch}}",
+      "mergeTo": "Mesclar em {{branch}}",
+      "resolving": "Resolvendo...",
+      "staging": "Preparando stage...",
+      "merging": "Mesclando...",
+      "completing": "Concluindo..."
+    },
+    "actions": {
+      "markAsDone": "Marcar como Concluída",
+      "discardTask": "Descartar Tarefa",
+      "viewComparison": "Ver Comparação"
+    }
+  },
+  "pr": {
+    "title": "Criar Pull Request",
+    "description": "Enviar a branch e criar um pull request para \"{{taskTitle}}\"",
+    "errors": {
+      "unknown": "Ocorreu um erro desconhecido ao criar o pull request",
+      "invalidBranchName": "O nome da branch contém caracteres inválidos. Use apenas letras, números, hífens (-), sublinhados (_) e barras (/).",
+      "emptyTitle": "O título do pull request não pode estar vazio."
+    },
+    "success": {
+      "created": "Pull request criado com sucesso!",
+      "alreadyExists": "Já existe um pull request para esta branch"
+    },
+    "actions": {
+      "retry": "Tentar Novamente",
+      "creating": "Criando PR...",
+      "create": "Criar Pull Request"
+    },
+    "labels": {
+      "sourceBranch": "Branch de origem",
+      "targetBranch": "Branch de destino",
+      "commits": "Commits",
+      "changes": "Alterações",
+      "prTitle": "Título do PR (opcional)",
+      "draftPR": "Criar como PR em rascunho",
+      "unknown": "Desconhecido"
+    },
+    "hints": {
+      "targetBranch": "Deixe em branco para usar a branch padrão",
+      "prTitle": "Deixe em branco para usar o título da tarefa"
+    }
+  },
+  "mergeProgress": {
+    "stages": {
+      "analyzing": "Analisando alterações",
+      "detectingConflicts": "Detectando conflitos",
+      "resolving": "Resolvendo conflitos",
+      "validating": "Validando mesclagem",
+      "complete": "Mesclagem concluída",
+      "error": "Falha na mesclagem",
+      "stalled": "Mesclagem travada"
+    },
+    "conflictCounter": "{{found}} encontrados, {{resolved}} resolvidos",
+    "currentFile": "Arquivo atual",
+    "viewLogs": "Ver logs",
+    "hideLogs": "Ocultar logs",
+    "logTypes": {
+      "info": "Info",
+      "warning": "Aviso",
+      "error": "Erro",
+      "conflict": "Conflito",
+      "resolution": "Resolução"
+    },
+    "completionMessage": "Todas as alterações foram mescladas com sucesso.",
+    "errorMessage": "Ocorreu um erro durante o processo de mesclagem."
+  },
+  "bulkPR": {
+    "title": "Criar Pull Requests",
+    "description": "Criar pull requests para {{count}} tarefas selecionadas",
+    "creating": "Criando PR {{current}} de {{total}}...",
+    "creatingPR": "Criando PR {{current}} de {{total}}",
+    "resultsDescription": "{{success}} com sucesso, {{failed}} com falha",
+    "tasksToProcess": "Tarefas a processar",
+    "targetBranchHint": "Deixe em branco para usar a branch padrão de cada tarefa. Isso será aplicado a todos os PRs.",
+    "createAll": "Criar {{count}} PRs",
+    "completed": "concluído",
+    "succeeded": "com sucesso",
+    "failed": "com falha",
+    "skipped": "ignorado",
+    "alreadyExisted": "já existia",
+    "noWorktree": "Nenhuma worktree encontrada para esta tarefa",
+    "resultsDescriptionWithSkipped": "{{success}} com sucesso, {{skipped}} ignorados, {{failed}} com falha"
+  }
+}
