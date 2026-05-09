@@ -312,6 +312,20 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       );
       return makeUnsubscribe(p);
     },
+    onAgentProfileSwitched: (
+      callback: (payload: {
+        taskId: string;
+        fromProfileId: string | null;
+        toProfileId: string | null;
+      }) => void,
+    ) => {
+      const p = listen<{
+        taskId: string;
+        fromProfileId: string | null;
+        toProfileId: string | null;
+      }>('agent:profile_switched', (e) => callback(e.payload));
+      return makeUnsubscribe(p);
+    },
   };
 
   // Terminal subsystem (Phase 4 spike) — real PTY via portable-pty Rust crate.

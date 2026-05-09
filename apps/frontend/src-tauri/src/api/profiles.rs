@@ -19,7 +19,7 @@ fn api_profiles_path() -> Option<std::path::PathBuf> {
     })
 }
 
-fn read_api_profiles() -> Value {
+pub(crate) fn read_api_profiles() -> Value {
     let path = match api_profiles_path() {
         Some(p) => p,
         None => return json!({ "profiles": [], "activeProfileId": null, "version": 1 }),
@@ -65,7 +65,7 @@ fn now_ms_profiles() -> u64 {
         .unwrap_or(0)
 }
 
-fn read_profiles() -> Value {
+pub(crate) fn read_profiles() -> Value {
     let path = match settings::settings_path() {
         Ok(p) => p,
         Err(_) => return json!({ "profiles": [], "activeProfileId": "" }),

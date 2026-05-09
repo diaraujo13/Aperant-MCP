@@ -1203,6 +1203,8 @@ pub async fn github_pr_review(
                 task_id: review_key.clone(),
                 kill_tx,
                 started_at: std::time::SystemTime::now(),
+                current_profile_id: None,
+                attempted_profile_ids: Vec::new(),
             },
         );
     }

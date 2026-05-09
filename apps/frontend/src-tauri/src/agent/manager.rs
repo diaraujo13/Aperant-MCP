@@ -8,6 +8,8 @@ pub struct RunningAgent {
     /// Sending on this channel signals the monitor task to kill the child process.
     pub kill_tx: tokio::sync::oneshot::Sender<()>,
     pub started_at: SystemTime,
+    pub current_profile_id: Option<String>,
+    pub attempted_profile_ids: Vec<String>,
 }
 
 pub struct AgentManager {
