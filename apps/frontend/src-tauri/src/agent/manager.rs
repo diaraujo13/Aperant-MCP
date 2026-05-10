@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 
+#[allow(dead_code)]
 pub struct RunningAgent {
     pub task_id: String,
     /// Sending on this channel signals the monitor task to kill the child process.
