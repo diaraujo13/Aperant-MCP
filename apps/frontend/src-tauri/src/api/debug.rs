@@ -87,8 +87,7 @@ pub async fn debug_get_info(app_handle: AppHandle) -> AppResult<DebugInfo> {
 #[tauri::command(rename_all = "camelCase")]
 pub async fn debug_open_logs_folder() -> AppResult<DebugResult> {
     let dir = logs_dir()?;
-    fs::create_dir_all(&dir)
-        .map_err(|e| AppError::new("create_dir_failed", e.to_string()))?;
+    fs::create_dir_all(&dir).map_err(|e| AppError::new("create_dir_failed", e.to_string()))?;
 
     // Cross-platform "open in file manager"
     let cmd = if cfg!(target_os = "macos") {

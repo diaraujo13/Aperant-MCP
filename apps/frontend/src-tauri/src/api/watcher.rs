@@ -85,10 +85,7 @@ async fn start_watching(
             };
 
             // Only care about create/modify events on implementation_plan.json.
-            if !matches!(
-                event.kind,
-                EventKind::Create(_) | EventKind::Modify(_)
-            ) {
+            if !matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
                 continue;
             }
 

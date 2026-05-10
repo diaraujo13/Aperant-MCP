@@ -41,7 +41,11 @@ const MAX_PROFILE_ATTEMPTS: usize = 4;
 /// Resolves the Python interpreter to use for the given project root.
 pub(crate) fn resolve_python(project_path: &Path) -> Option<PathBuf> {
     let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
-    let py_name = if cfg!(windows) { "python.exe" } else { "python" };
+    let py_name = if cfg!(windows) {
+        "python.exe"
+    } else {
+        "python"
+    };
 
     let venv_candidates = [
         project_path
@@ -370,7 +374,10 @@ fn do_spawn(
             );
         }
 
-        let _ = app.emit("agent:state", json!({ "taskId": task_id, "state": "running" }));
+        let _ = app.emit(
+            "agent:state",
+            json!({ "taskId": task_id, "state": "running" }),
+        );
         info!(
             "[agent] started task {} via {:?} (profile: {:?})",
             task_id, python, current_profile_id
@@ -507,7 +514,10 @@ mod env_injection_tests {
             profile_id: "api-1".into(),
             profile_kind: ProfileKind::Api,
             env: vec![
-                ("ANTHROPIC_BASE_URL".into(), "https://api.example.com".into()),
+                (
+                    "ANTHROPIC_BASE_URL".into(),
+                    "https://api.example.com".into(),
+                ),
                 ("ANTHROPIC_AUTH_TOKEN".into(), "sk-test".into()),
             ],
         };
@@ -570,7 +580,11 @@ mod env_injection_tests {
             Some("fresh-oauth"),
             "OAuth token must be injected"
         );
-        for k in ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"] {
+        for k in [
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_MODEL",
+        ] {
             assert!(
                 !env.contains_key(k),
                 "{} must be stripped when OAuth profile is active (got: {:?})",
@@ -644,7 +658,10 @@ mod env_injection_tests {
             profile_id: "api-3".into(),
             profile_kind: ProfileKind::Api,
             env: vec![
-                ("ANTHROPIC_BASE_URL".into(), "https://api.example.com".into()),
+                (
+                    "ANTHROPIC_BASE_URL".into(),
+                    "https://api.example.com".into(),
+                ),
                 ("ANTHROPIC_AUTH_TOKEN".into(), "sk-test".into()),
             ],
         };
@@ -683,7 +700,10 @@ mod env_injection_tests {
             profile_id: "api-2".into(),
             profile_kind: ProfileKind::Api,
             env: vec![
-                ("ANTHROPIC_BASE_URL".into(), "https://api.example.com".into()),
+                (
+                    "ANTHROPIC_BASE_URL".into(),
+                    "https://api.example.com".into(),
+                ),
                 ("ANTHROPIC_AUTH_TOKEN".into(), "sk-test".into()),
                 ("ANTHROPIC_MODEL".into(), "claude-sonnet-4-5".into()),
             ],

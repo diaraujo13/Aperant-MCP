@@ -93,16 +93,11 @@ async fn gh_api(
 /// Runs a `gh` subcommand (not `gh api`) and returns raw stdout as a string.
 async fn gh_run(args: &[&str], cwd: Option<&Path>) -> Result<String, String> {
     let mut cmd = tokio::process::Command::new("gh");
-    cmd.args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    let output = cmd
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
+    let output = cmd.output().await.map_err(|e| e.to_string())?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
@@ -115,10 +110,7 @@ fn project_path(project_id: &str) -> Option<PathBuf> {
     let s = project::read_store_at(&store);
     for p in s.projects() {
         if p.get("id").and_then(|v| v.as_str()) == Some(project_id) {
-            return p
-                .get("path")
-                .and_then(|v| v.as_str())
-                .map(PathBuf::from);
+            return p.get("path").and_then(|v| v.as_str()).map(PathBuf::from);
         }
     }
     None
@@ -133,7 +125,8 @@ struct RepoInfo {
 /// Resolves owner/repo for a project by running `gh repo view` in the project
 /// directory. Falls back to `settings.githubRepo` stored in projects.json.
 async fn resolve_repo(project_id: &str) -> Result<RepoInfo, String> {
-    let path = project_path(project_id).ok_or_else(|| format!("project not found: {project_id}"))?;
+    let path =
+        project_path(project_id).ok_or_else(|| format!("project not found: {project_id}"))?;
 
     // Try stored repo from project settings first.
     {
@@ -249,7 +242,10 @@ fn find_device_code(text: &str) -> Option<String> {
 /// Extracts the device-flow URL from `gh` output, defaulting to the standard URL.
 fn find_device_url(text: &str) -> String {
     if let Some(pos) = text.find("https://github.com/login/device") {
-        let url: String = text[pos..].chars().take_while(|c| !c.is_whitespace()).collect();
+        let url: String = text[pos..]
+            .chars()
+            .take_while(|c| !c.is_whitespace())
+            .collect();
         return url;
     }
     GITHUB_DEVICE_URL.to_string()
@@ -262,10 +258,14 @@ fn open_in_browser(url: &str) -> bool {
     #[cfg(target_os = "linux")]
     let r = std::process::Command::new("xdg-open").arg(url).spawn();
     #[cfg(target_os = "windows")]
-    let r = std::process::Command::new("cmd").args(["/c", "start", "", url]).spawn();
+    let r = std::process::Command::new("cmd")
+        .args(["/c", "start", "", url])
+        .spawn();
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    let r: Result<std::process::Child, std::io::Error> =
-        Err(std::io::Error::new(std::io::ErrorKind::Other, "unsupported"));
+    let r: Result<std::process::Child, std::io::Error> = Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "unsupported",
+    ));
     r.is_ok()
 }
 
@@ -443,10 +443,7 @@ pub async fn github_start_auth(app: AppHandle) -> Result<IpcResult<Value>, ()> {
                 "fallbackUrl": &extracted_url,
                 "message": "Authentication failed. Please visit the URL manually.",
             })),
-            error: Some(format!(
-                "gh exited with code {:?}",
-                status.code()
-            )),
+            error: Some(format!("gh exited with code {:?}", status.code())),
         })
     }
 }
@@ -455,7 +452,12 @@ pub async fn github_start_auth(app: AppHandle) -> Result<IpcResult<Value>, ()> {
 pub async fn github_detect_repo(project_path: String) -> Result<IpcResult<Value>, ()> {
     let path = PathBuf::from(&project_path);
     let output = tokio::process::Command::new("gh")
-        .args(["repo", "view", "--json", "owner,name,url,description,isPrivate"])
+        .args([
+            "repo",
+            "view",
+            "--json",
+            "owner,name,url,description,isPrivate",
+        ])
         .current_dir(&path)
         .output()
         .await;
@@ -513,14 +515,22 @@ pub async fn github_create_repo(
     is_private: bool,
 ) -> Result<IpcResult<Value>, ()> {
     let visibility = if is_private { "--private" } else { "--public" };
-    match gh_run(&["repo", "create", &repo_name, visibility, "--source=."], None).await {
+    match gh_run(
+        &["repo", "create", &repo_name, visibility, "--source=."],
+        None,
+    )
+    .await
+    {
         Ok(_) => ok(json!({ "created": true, "name": repo_name })),
         Err(e) => err(&e),
     }
 }
 
 #[tauri::command]
-pub async fn github_add_remote(project_path: String, repo_url: String) -> Result<IpcResult<Value>, ()> {
+pub async fn github_add_remote(
+    project_path: String,
+    repo_url: String,
+) -> Result<IpcResult<Value>, ()> {
     let output = tokio::process::Command::new("git")
         .args(["remote", "add", "origin", &repo_url])
         .current_dir(&project_path)
@@ -558,7 +568,14 @@ pub async fn github_check_connection(project_id: String) -> Result<IpcResult<Val
 #[tauri::command]
 pub async fn github_get_repositories() -> Result<IpcResult<Value>, ()> {
     // personal + org repos — returns combined list
-    match gh_api("user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member", "GET", None, None).await {
+    match gh_api(
+        "user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
+        "GET",
+        None,
+        None,
+    )
+    .await
+    {
         Ok(repos) => ok(repos),
         Err(e) => err(&e),
     }
@@ -667,17 +684,16 @@ pub async fn github_pr_list_more(
     match gh_api(&path, "GET", None, Some(&r.path)).await {
         Ok(prs) => {
             let has_more = prs.as_array().map(|a| a.len() == 30).unwrap_or(false);
-            ok(json!({ "pullRequests": prs, "pageInfo": { "hasNextPage": has_more, "endCursor": p + 1 } }))
+            ok(
+                json!({ "pullRequests": prs, "pageInfo": { "hasNextPage": has_more, "endCursor": p + 1 } }),
+            )
         }
         Err(e) => err(&e),
     }
 }
 
 #[tauri::command]
-pub async fn github_pr_get(
-    project_id: String,
-    pr_number: u32,
-) -> Result<IpcResult<Value>, ()> {
+pub async fn github_pr_get(project_id: String, pr_number: u32) -> Result<IpcResult<Value>, ()> {
     let r = match resolve_repo(&project_id).await {
         Ok(r) => r,
         Err(e) => return err(&e),
@@ -703,7 +719,8 @@ pub async fn github_pr_get_diff(
     cmd.args([
         "api",
         &format!("repos/{}/{}/pulls/{}", r.owner, r.repo, pr_number),
-        "--header", "Accept: application/vnd.github.v3.diff",
+        "--header",
+        "Accept: application/vnd.github.v3.diff",
     ])
     .current_dir(&r.path)
     .stdout(Stdio::piped())
@@ -769,10 +786,7 @@ pub async fn github_pr_check_new_commits(
         Ok(r) => r,
         Err(e) => return err(&e),
     };
-    let path = format!(
-        "repos/{}/{}/pulls/{}/commits",
-        r.owner, r.repo, pr_number
-    );
+    let path = format!("repos/{}/{}/pulls/{}/commits", r.owner, r.repo, pr_number);
     match gh_api(&path, "GET", None, Some(&r.path)).await {
         Ok(commits) => ok(json!({ "commits": commits })),
         Err(e) => err(&e),
@@ -878,16 +892,20 @@ pub async fn github_pr_delete_review(
 }
 
 #[tauri::command]
-pub async fn github_pr_merge(
-    project_id: String,
-    pr_number: u32,
-) -> Result<IpcResult<Value>, ()> {
+pub async fn github_pr_merge(project_id: String, pr_number: u32) -> Result<IpcResult<Value>, ()> {
     let r = match resolve_repo(&project_id).await {
         Ok(r) => r,
         Err(e) => return err(&e),
     };
     match gh_run(
-        &["pr", "merge", &pr_number.to_string(), "--merge", "--repo", &format!("{}/{}", r.owner, r.repo)],
+        &[
+            "pr",
+            "merge",
+            &pr_number.to_string(),
+            "--merge",
+            "--repo",
+            &format!("{}/{}", r.owner, r.repo),
+        ],
         Some(&r.path),
     )
     .await
@@ -911,7 +929,14 @@ pub async fn github_pr_assign(
         "repos/{}/{}/pulls/{}/requested_reviewers",
         r.owner, r.repo, pr_number
     );
-    match gh_api(&path, "POST", Some(json!({ "reviewers": [assignee] })), Some(&r.path)).await {
+    match gh_api(
+        &path,
+        "POST",
+        Some(json!({ "reviewers": [assignee] })),
+        Some(&r.path),
+    )
+    .await
+    {
         Ok(v) => ok(v),
         Err(e) => err(&e),
     }
@@ -927,11 +952,15 @@ pub async fn github_pr_post_comment(
         Ok(r) => r,
         Err(e) => return err(&e),
     };
-    let path = format!(
-        "repos/{}/{}/issues/{}/comments",
-        r.owner, r.repo, pr_number
-    );
-    match gh_api(&path, "POST", Some(json!({ "body": comment })), Some(&r.path)).await {
+    let path = format!("repos/{}/{}/issues/{}/comments", r.owner, r.repo, pr_number);
+    match gh_api(
+        &path,
+        "POST",
+        Some(json!({ "body": comment })),
+        Some(&r.path),
+    )
+    .await
+    {
         Ok(v) => ok(v),
         Err(e) => err(&e),
     }
@@ -1088,8 +1117,16 @@ pub async fn github_create_release(
 /// Checks: <project>/apps/backend/runners/github/runner.py, then <project>/runners/...
 fn find_runner(project_path: &Path) -> Option<std::path::PathBuf> {
     let candidates = [
-        project_path.join("apps").join("backend").join("runners").join("github").join("runner.py"),
-        project_path.join("runners").join("github").join("runner.py"),
+        project_path
+            .join("apps")
+            .join("backend")
+            .join("runners")
+            .join("github")
+            .join("runner.py"),
+        project_path
+            .join("runners")
+            .join("github")
+            .join("runner.py"),
     ];
     for p in &candidates {
         if p.exists() {
@@ -1200,7 +1237,6 @@ pub async fn github_pr_review(
     tokio::spawn(async move {
         use tokio::io::AsyncBufReadExt;
 
-
         let (tx, mut rx) = tokio::sync::mpsc::channel::<(String, String)>(128);
         let tx2 = tx.clone();
 
@@ -1277,15 +1313,20 @@ pub async fn github_pr_review(
             payload.insert("projectId".into(), serde_json::json!(pid_str));
             let _ = app_c.emit("github:pr:review:complete", Value::Object(payload));
         } else {
-            let _ = app_c.emit("github:pr:review:error", serde_json::json!({
-                "projectId": pid_str,
-                "prNumber": pr_number,
-                "error": "PR review process exited with error",
-            }));
+            let _ = app_c.emit(
+                "github:pr:review:error",
+                serde_json::json!({
+                    "projectId": pid_str,
+                    "prNumber": pr_number,
+                    "error": "PR review process exited with error",
+                }),
+            );
         }
     });
 
-    Ok(IpcResult::ok(json!({ "started": true, "prNumber": pr_number })))
+    Ok(IpcResult::ok(
+        json!({ "started": true, "prNumber": pr_number }),
+    ))
 }
 
 #[tauri::command]
@@ -1309,10 +1350,7 @@ pub async fn github_pr_review_cancel(
 }
 
 #[tauri::command]
-pub async fn github_pr_fix(
-    _project_id: String,
-    _pr_number: u32,
-) -> Result<IpcResult<Value>, ()> {
+pub async fn github_pr_fix(_project_id: String, _pr_number: u32) -> Result<IpcResult<Value>, ()> {
     deferred("github_pr_fix:python-runner")
 }
 
@@ -1382,9 +1420,7 @@ pub async fn github_autofix_get_batches(_project_id: String) -> Result<IpcResult
 }
 
 #[tauri::command]
-pub async fn github_autofix_analyze_preview(
-    _project_id: String,
-) -> Result<IpcResult<Value>, ()> {
+pub async fn github_autofix_analyze_preview(_project_id: String) -> Result<IpcResult<Value>, ()> {
     deferred("github_autofix_analyze_preview:python-runner")
 }
 

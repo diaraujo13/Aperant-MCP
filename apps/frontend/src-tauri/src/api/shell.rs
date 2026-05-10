@@ -157,9 +157,21 @@ pub async fn shell_search_all_projects(query: String) -> AppResult<IpcResult<Val
         .projects()
         .into_iter()
         .filter(|p| {
-            let name = p.get("name").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
-            let path = p.get("path").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
-            let desc = p.get("description").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+            let name = p
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let path = p
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let desc = p
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
             name.contains(&q) || path.contains(&q) || desc.contains(&q)
         })
         .map(|p| {

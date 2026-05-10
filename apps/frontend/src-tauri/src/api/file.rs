@@ -26,8 +26,7 @@ pub async fn file_explorer_list(dir_path: String) -> AppResult<IpcResult<Vec<Fil
             format!("Path is not a directory: {dir_path}"),
         ));
     }
-    let entries = fs::read_dir(dir)
-        .map_err(|e| AppError::new("read_dir_failed", e.to_string()))?;
+    let entries = fs::read_dir(dir).map_err(|e| AppError::new("read_dir_failed", e.to_string()))?;
 
     let mut nodes = Vec::new();
     for entry in entries.flatten() {
@@ -41,7 +40,11 @@ pub async fn file_explorer_list(dir_path: String) -> AppResult<IpcResult<Vec<Fil
             name: entry.file_name().to_string_lossy().to_string(),
             path: path.to_string_lossy().to_string(),
             is_directory,
-            size: if is_directory { None } else { Some(metadata.len()) },
+            size: if is_directory {
+                None
+            } else {
+                Some(metadata.len())
+            },
         });
     }
 
@@ -69,8 +72,7 @@ pub async fn file_explorer_read(file_path: String) -> AppResult<IpcResult<String
             format!("Path is not a regular file: {file_path}"),
         ));
     }
-    let metadata = fs::metadata(path)
-        .map_err(|e| AppError::new("stat_failed", e.to_string()))?;
+    let metadata = fs::metadata(path).map_err(|e| AppError::new("stat_failed", e.to_string()))?;
     if metadata.len() > MAX_READ_BYTES {
         return Err(AppError::new(
             "file_too_large",
@@ -81,8 +83,8 @@ pub async fn file_explorer_read(file_path: String) -> AppResult<IpcResult<String
             ),
         ));
     }
-    let content = fs::read_to_string(path)
-        .map_err(|e| AppError::new("read_failed", e.to_string()))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| AppError::new("read_failed", e.to_string()))?;
     Ok(IpcResult::ok(content))
 }
 

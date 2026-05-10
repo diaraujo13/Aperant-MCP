@@ -132,6 +132,9 @@ mod tests {
             output.status.success(),
             "process should exit 0, stdout={stdout:?}, stderr={stderr:?}"
         );
-        assert!(stdout.contains("ok"), "stdout should contain 'ok', got: {stdout:?}");
+        assert!(
+            stdout.contains("ok"),
+            "stdout should contain 'ok', got: {stdout:?}"
+        );
     }
 }

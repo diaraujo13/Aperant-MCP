@@ -165,11 +165,13 @@ pub async fn diag_get_rdr_state() -> AppResult<IpcResult<RdrDiagnostics>> {
         .unwrap_or_default();
 
     // Auto-expiry: if the rate-limit reset time has already passed, clear the pause.
-    if pause_state.paused && pause_state.rate_limit_reset_at > 0
-        && now_ms() > pause_state.rate_limit_reset_at {
-            pause_state.paused = false;
-            pause_state.warning = false;
-        }
+    if pause_state.paused
+        && pause_state.rate_limit_reset_at > 0
+        && now_ms() > pause_state.rate_limit_reset_at
+    {
+        pause_state.paused = false;
+        pause_state.warning = false;
+    }
 
     Ok(IpcResult::ok(RdrDiagnostics {
         rdr_pause_state: pause_state,

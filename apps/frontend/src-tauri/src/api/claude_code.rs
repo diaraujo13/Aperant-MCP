@@ -139,7 +139,9 @@ fn paths_to_probe() -> Vec<(PathBuf, &'static str)> {
 /// `claude-code version 1.2.3` returned `claude-code` as the version.
 fn extract_version(stdout: &str) -> Option<String> {
     stdout.split_whitespace().find_map(|token| {
-        let candidate = token.trim_start_matches('v').trim_end_matches([',', ';', ')']);
+        let candidate = token
+            .trim_start_matches('v')
+            .trim_end_matches([',', ';', ')']);
         semver::Version::parse(candidate)
             .ok()
             .map(|_| candidate.to_string())
@@ -420,7 +422,11 @@ mod tests {
     #[test]
     fn candidate_paths_per_os_returns_some_entries() {
         let paths = candidate_paths();
-        if cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows")) {
+        if cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "windows"
+        )) {
             assert!(!paths.is_empty());
         }
     }

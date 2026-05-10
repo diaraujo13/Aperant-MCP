@@ -112,8 +112,7 @@ fn write_store_at(path: &Path, store: &Store) -> AppResult<()> {
     let pretty = serde_json::to_string_pretty(&store.raw)
         .map_err(|e| AppError::new("serialize_failed", e.to_string()))?;
     let temp_path = path.with_extension("json.tmp");
-    fs::write(&temp_path, pretty)
-        .map_err(|e| AppError::new("temp_write_failed", e.to_string()))?;
+    fs::write(&temp_path, pretty).map_err(|e| AppError::new("temp_write_failed", e.to_string()))?;
     fs::rename(&temp_path, path).map_err(|e| {
         let _ = fs::remove_file(&temp_path);
         AppError::new("rename_failed", e.to_string())
@@ -313,11 +312,7 @@ pub async fn project_update_settings(
     Ok(IpcResult::ok(()))
 }
 
-fn toggle_project_setting(
-    project_id: &str,
-    key: &str,
-    enabled: bool,
-) -> AppResult<Value> {
+fn toggle_project_setting(project_id: &str, key: &str, enabled: bool) -> AppResult<Value> {
     mutate_store(|store| {
         let now = chrono::Utc::now().to_rfc3339();
         let mut projects = store.projects();
@@ -391,22 +386,14 @@ pub async fn tab_state_save(tab_state: Value) -> AppResult<IpcResult<()>> {
         let valid_ids: std::collections::HashSet<String> = store
             .projects()
             .iter()
-            .filter_map(|p| {
-                p.get("id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
+            .filter_map(|p| p.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
             .collect();
 
         let mut sanitized = tab_state;
         if let Some(obj) = sanitized.as_object_mut() {
             for key in ["openProjectIds", "tabOrder"] {
                 if let Some(arr) = obj.get_mut(key).and_then(|v| v.as_array_mut()) {
-                    arr.retain(|v| {
-                        v.as_str()
-                            .map(|s| valid_ids.contains(s))
-                            .unwrap_or(false)
-                    });
+                    arr.retain(|v| v.as_str().map(|s| valid_ids.contains(s)).unwrap_or(false));
                 }
             }
             let active_valid = obj
@@ -425,9 +412,7 @@ pub async fn tab_state_save(tab_state: Value) -> AppResult<IpcResult<()>> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn kanban_preferences_get(
-    project_id: String,
-) -> AppResult<IpcResult<Value>> {
+pub async fn kanban_preferences_get(project_id: String) -> AppResult<IpcResult<Value>> {
     let path = store_path()?;
     let store = read_store_at(&path);
     Ok(IpcResult::ok(store.kanban_preferences_for(&project_id)))
@@ -449,24 +434,33 @@ pub async fn kanban_preferences_save(
 pub async fn project_env_get(project_id: String) -> AppResult<IpcResult<Value>> {
     let store_path = store_path()?;
     let store = read_store_at(&store_path);
-    let project = store.projects().into_iter()
+    let project = store
+        .projects()
+        .into_iter()
         .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
 
     let Some(proj) = project else {
-        return Ok(IpcResult { success: false, data: None, error: Some("project_not_found".to_string()) });
+        return Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("project_not_found".to_string()),
+        });
     };
 
     // EnvConfig is stored under project.settings.envConfig
-    let env_config = proj.get("settings")
+    let env_config = proj
+        .get("settings")
         .and_then(|s| s.get("envConfig"))
         .cloned()
-        .unwrap_or_else(|| json!({
-            "claudeAuthStatus": "not_configured",
-            "linearEnabled": false,
-            "githubEnabled": false,
-            "gitlabEnabled": false,
-            "huggingfaceEnabled": false,
-        }));
+        .unwrap_or_else(|| {
+            json!({
+                "claudeAuthStatus": "not_configured",
+                "linearEnabled": false,
+                "githubEnabled": false,
+                "gitlabEnabled": false,
+                "huggingfaceEnabled": false,
+            })
+        });
 
     Ok(IpcResult::ok(env_config))
 }
@@ -475,18 +469,29 @@ pub async fn project_env_get(project_id: String) -> AppResult<IpcResult<Value>> 
 pub async fn project_env_update(project_id: String, config: Value) -> AppResult<IpcResult<()>> {
     mutate_store(|store| {
         let mut projects = store.projects();
-        let found = projects.iter_mut().find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
+        let found = projects
+            .iter_mut()
+            .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
 
         let Some(proj) = found else {
-            return Err(AppError::new("project_not_found", format!("No project with id {project_id}")));
+            return Err(AppError::new(
+                "project_not_found",
+                format!("No project with id {project_id}"),
+            ));
         };
 
         // Merge into project.settings.envConfig
         if let Some(obj) = proj.as_object_mut() {
-            let settings = obj.entry("settings".to_string()).or_insert_with(|| json!({}));
+            let settings = obj
+                .entry("settings".to_string())
+                .or_insert_with(|| json!({}));
             if let Some(settings_obj) = settings.as_object_mut() {
-                let env_config = settings_obj.entry("envConfig".to_string()).or_insert_with(|| json!({}));
-                if let (Some(ec_obj), Some(cfg_obj)) = (env_config.as_object_mut(), config.as_object()) {
+                let env_config = settings_obj
+                    .entry("envConfig".to_string())
+                    .or_insert_with(|| json!({}));
+                if let (Some(ec_obj), Some(cfg_obj)) =
+                    (env_config.as_object_mut(), config.as_object())
+                {
                     for (k, v) in cfg_obj {
                         ec_obj.insert(k.clone(), v.clone());
                     }
@@ -504,14 +509,24 @@ pub async fn project_env_update(project_id: String, config: Value) -> AppResult<
 pub async fn project_initialize(project_id: String) -> AppResult<IpcResult<Value>> {
     let store_path = store_path()?;
     let store = read_store_at(&store_path);
-    let proj = store.projects().into_iter()
+    let proj = store
+        .projects()
+        .into_iter()
         .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
 
     let Some(proj) = proj else {
-        return Ok(IpcResult { success: false, data: None, error: Some("project_not_found".to_string()) });
+        return Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("project_not_found".to_string()),
+        });
     };
 
-    let proj_path = proj.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let proj_path = proj
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     // Create .auto-claude/specs directory if it doesn't exist
     let specs_dir = PathBuf::from(&proj_path).join(".auto-claude/specs");
@@ -533,7 +548,9 @@ pub async fn project_check_version(project_id: String) -> AppResult<IpcResult<Va
     // Stub: version check requires Python backend
     let store_path = store_path()?;
     let store = read_store_at(&store_path);
-    let _proj = store.projects().into_iter()
+    let _proj = store
+        .projects()
+        .into_iter()
         .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&project_id));
 
     Ok(IpcResult::ok(json!({

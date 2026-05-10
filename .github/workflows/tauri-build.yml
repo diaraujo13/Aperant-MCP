@@ -73,6 +73,8 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Cache cargo registry + target
         uses: actions/cache@v4
@@ -88,6 +90,14 @@ jobs:
       - name: Install frontend deps
         working-directory: apps/frontend
         run: npm ci
+
+      - name: Rustfmt check
+        working-directory: apps/frontend/src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        working-directory: apps/frontend/src-tauri
+        run: cargo clippy --release --no-deps --locked -- -D warnings
 
       - name: Cargo check (fast fail gate)
         working-directory: apps/frontend/src-tauri

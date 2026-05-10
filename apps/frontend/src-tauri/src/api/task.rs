@@ -16,10 +16,7 @@ fn project_path_by_id(project_id: &str) -> Option<PathBuf> {
     let store = project::read_store_at(&store_path);
     for p in store.projects() {
         if p.get("id").and_then(|v| v.as_str()) == Some(project_id) {
-            return p
-                .get("path")
-                .and_then(|v| v.as_str())
-                .map(PathBuf::from);
+            return p.get("path").and_then(|v| v.as_str()).map(PathBuf::from);
         }
     }
     None
@@ -197,8 +194,8 @@ pub async fn task_list(
     }
 
     let mut tasks = Vec::new();
-    let entries = fs::read_dir(&specs_dir)
-        .map_err(|e| AppError::new("read_specs_failed", e.to_string()))?;
+    let entries =
+        fs::read_dir(&specs_dir).map_err(|e| AppError::new("read_specs_failed", e.to_string()))?;
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_dir() {
@@ -295,29 +292,26 @@ pub async fn task_create(
     }
 
     let task = build_task_from_disk(&project_id, &spec_dir).ok_or_else(|| {
-        AppError::new("build_task_failed", "Built task immediately after write but read failed")
+        AppError::new(
+            "build_task_failed",
+            "Built task immediately after write but read failed",
+        )
     })?;
     Ok(IpcResult::ok(task))
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn task_delete(task_id: String) -> AppResult<IpcResult<()>> {
-    let (_, _, spec_dir) = find_task_location(&task_id).ok_or_else(|| {
-        AppError::new("task_not_found", format!("No task with id {task_id}"))
-    })?;
-    fs::remove_dir_all(&spec_dir)
-        .map_err(|e| AppError::new("remove_failed", e.to_string()))?;
+    let (_, _, spec_dir) = find_task_location(&task_id)
+        .ok_or_else(|| AppError::new("task_not_found", format!("No task with id {task_id}")))?;
+    fs::remove_dir_all(&spec_dir).map_err(|e| AppError::new("remove_failed", e.to_string()))?;
     Ok(IpcResult::ok(()))
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn task_update(
-    task_id: String,
-    updates: Value,
-) -> AppResult<IpcResult<Value>> {
-    let (project_id, _, spec_dir) = find_task_location(&task_id).ok_or_else(|| {
-        AppError::new("task_not_found", format!("No task with id {task_id}"))
-    })?;
+pub async fn task_update(task_id: String, updates: Value) -> AppResult<IpcResult<Value>> {
+    let (project_id, _, spec_dir) = find_task_location(&task_id)
+        .ok_or_else(|| AppError::new("task_not_found", format!("No task with id {task_id}")))?;
     let plan_path = spec_dir.join(PLAN_FILENAME);
     if !plan_path.exists() {
         return Err(AppError::new(
@@ -366,9 +360,8 @@ pub async fn task_update(
     )
     .map_err(|e| AppError::new("write_plan_failed", e.to_string()))?;
 
-    let task = build_task_from_disk(&project_id, &spec_dir).ok_or_else(|| {
-        AppError::new("build_task_failed", "Failed to rebuild task after update")
-    })?;
+    let task = build_task_from_disk(&project_id, &spec_dir)
+        .ok_or_else(|| AppError::new("build_task_failed", "Failed to rebuild task after update"))?;
     Ok(IpcResult::ok(task))
 }
 
@@ -461,13 +454,9 @@ pub async fn task_unarchive(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn task_toggle_rdr(
-    task_id: String,
-    disabled: bool,
-) -> AppResult<IpcResult<bool>> {
-    let (_, _, spec_dir) = find_task_location(&task_id).ok_or_else(|| {
-        AppError::new("task_not_found", format!("No task with id {task_id}"))
-    })?;
+pub async fn task_toggle_rdr(task_id: String, disabled: bool) -> AppResult<IpcResult<bool>> {
+    let (_, _, spec_dir) = find_task_location(&task_id)
+        .ok_or_else(|| AppError::new("task_not_found", format!("No task with id {task_id}")))?;
     write_metadata_field(&spec_dir, |map| {
         map.insert("rdrDisabled".to_string(), json!(disabled));
     })?;
@@ -479,7 +468,10 @@ const QA_FIX_REQUEST_FILENAME: &str = "QA_FIX_REQUEST.md";
 fn update_plan_status(spec_dir: &Path, new_plan_status: &str) -> AppResult<()> {
     let plan_path = spec_dir.join(PLAN_FILENAME);
     if !plan_path.exists() {
-        return Err(AppError::new("plan_not_found", "implementation_plan.json not found"));
+        return Err(AppError::new(
+            "plan_not_found",
+            "implementation_plan.json not found",
+        ));
     }
     let content = fs::read_to_string(&plan_path)
         .map_err(|e| AppError::new("read_plan_failed", e.to_string()))?;
@@ -487,12 +479,14 @@ fn update_plan_status(spec_dir: &Path, new_plan_status: &str) -> AppResult<()> {
         .map_err(|e| AppError::new("parse_plan_failed", e.to_string()))?;
     if let Some(obj) = plan.as_object_mut() {
         obj.insert("status".to_string(), json!(new_plan_status));
-        obj.insert("updated_at".to_string(), json!(chrono::Utc::now().to_rfc3339()));
+        obj.insert(
+            "updated_at".to_string(),
+            json!(chrono::Utc::now().to_rfc3339()),
+        );
     }
     let pretty = serde_json::to_string_pretty(&plan)
         .map_err(|e| AppError::new("serialize_plan_failed", e.to_string()))?;
-    fs::write(&plan_path, pretty)
-        .map_err(|e| AppError::new("write_plan_failed", e.to_string()))
+    fs::write(&plan_path, pretty).map_err(|e| AppError::new("write_plan_failed", e.to_string()))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -503,7 +497,11 @@ pub async fn task_submit_review(
     _images: Option<Value>,
 ) -> AppResult<IpcResult<()>> {
     let Some((_, _, spec_dir)) = find_task_location(&task_id) else {
-        return Ok(IpcResult { success: false, data: None, error: Some("task_not_found".to_string()) });
+        return Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("task_not_found".to_string()),
+        });
     };
 
     if approved {
@@ -535,14 +533,20 @@ pub async fn task_update_status(
     _options: Option<Value>,
 ) -> AppResult<IpcResult<Value>> {
     let Some((_, proj_path, spec_dir)) = find_task_location(&task_id) else {
-        return Ok(IpcResult { success: false, data: None, error: Some("task_not_found".to_string()) });
+        return Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("task_not_found".to_string()),
+        });
     };
 
     let plan_status = map_task_status_to_plan_status(&status);
     update_plan_status(&spec_dir, plan_status)?;
 
     // Check if worktree exists for this task
-    let wt_path = proj_path.join(".auto-claude/worktrees/tasks").join(&task_id);
+    let wt_path = proj_path
+        .join(".auto-claude/worktrees/tasks")
+        .join(&task_id);
     let worktree_exists = wt_path.is_dir();
     let worktree_path_str = if worktree_exists {
         Some(wt_path.to_string_lossy().to_string())
@@ -561,7 +565,11 @@ pub async fn task_update_status(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn task_resume_paused(task_id: String) -> AppResult<IpcResult<()>> {
     let Some((_, _, spec_dir)) = find_task_location(&task_id) else {
-        return Ok(IpcResult { success: false, data: None, error: Some("task_not_found".to_string()) });
+        return Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("task_not_found".to_string()),
+        });
     };
     update_plan_status(&spec_dir, "start_requested")?;
     Ok(IpcResult::ok(()))
@@ -573,7 +581,11 @@ pub async fn task_load_image_thumbnail(
     _spec_id: String,
     _image_path: String,
 ) -> AppResult<IpcResult<String>> {
-    Ok(IpcResult { success: false, data: None, error: Some("image_thumbnail_not_ported".to_string()) })
+    Ok(IpcResult {
+        success: false,
+        data: None,
+        error: Some("image_thumbnail_not_ported".to_string()),
+    })
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -585,15 +597,25 @@ pub async fn task_refine_description(description: String) -> AppResult<IpcResult
 #[tauri::command(rename_all = "camelCase")]
 pub async fn task_get_logs(project_id: String, spec_id: String) -> AppResult<IpcResult<Value>> {
     let project_path = project_path_by_id(&project_id).ok_or_else(|| {
-        AppError::new("project_not_found", format!("No project with id {project_id}"))
+        AppError::new(
+            "project_not_found",
+            format!("No project with id {project_id}"),
+        )
     })?;
-    let log_path = project_path.join(".auto-claude/specs").join(&spec_id).join("task.log");
+    let log_path = project_path
+        .join(".auto-claude/specs")
+        .join(&spec_id)
+        .join("task.log");
     if !log_path.exists() {
-        return Ok(IpcResult::ok(json!({ "specId": spec_id, "lines": [], "exists": false })));
+        return Ok(IpcResult::ok(
+            json!({ "specId": spec_id, "lines": [], "exists": false }),
+        ));
     }
     let content = fs::read_to_string(&log_path).unwrap_or_default();
     let lines: Vec<&str> = content.lines().collect();
-    Ok(IpcResult::ok(json!({ "specId": spec_id, "lines": lines, "exists": true })))
+    Ok(IpcResult::ok(
+        json!({ "specId": spec_id, "lines": lines, "exists": true }),
+    ))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -643,7 +665,13 @@ mod tests {
 
     #[test]
     fn map_task_to_plan_status_round_trips() {
-        for s in ["in_progress", "ai_review", "human_review", "done", "pr_created"] {
+        for s in [
+            "in_progress",
+            "ai_review",
+            "human_review",
+            "done",
+            "pr_created",
+        ] {
             assert_eq!(
                 map_plan_status_to_task_status(map_task_status_to_plan_status(s)),
                 s

@@ -16,9 +16,8 @@ const APP_NAME: &str = "auto-claude-ui";
 /// - Windows: %APPDATA%\auto-claude-ui\settings.json
 /// - Linux:   ~/.config/auto-claude-ui/settings.json
 pub(crate) fn settings_path() -> AppResult<PathBuf> {
-    let base = dirs::config_dir().ok_or_else(|| {
-        AppError::new("no_config_dir", "Could not resolve OS config directory")
-    })?;
+    let base = dirs::config_dir()
+        .ok_or_else(|| AppError::new("no_config_dir", "Could not resolve OS config directory"))?;
     Ok(base.join(APP_NAME).join("settings.json"))
 }
 
@@ -51,8 +50,7 @@ pub(crate) fn write_settings_at(path: &Path, settings: &Value) -> AppResult<()> 
         .map_err(|e| AppError::new("serialize_failed", e.to_string()))?;
 
     let temp_path = path.with_extension("json.tmp");
-    fs::write(&temp_path, pretty)
-        .map_err(|e| AppError::new("temp_write_failed", e.to_string()))?;
+    fs::write(&temp_path, pretty).map_err(|e| AppError::new("temp_write_failed", e.to_string()))?;
     fs::rename(&temp_path, path).map_err(|e| {
         // Best effort cleanup of orphaned temp file
         let _ = fs::remove_file(&temp_path);
@@ -165,7 +163,11 @@ fn probe_version(name: &str) -> Option<String> {
         .unwrap_or("")
         .trim()
         .to_string();
-    if line.is_empty() { None } else { Some(line) }
+    if line.is_empty() {
+        None
+    } else {
+        Some(line)
+    }
 }
 
 /// Returns the full path of `name` by delegating to `which` (Unix) or
@@ -245,7 +247,9 @@ pub async fn settings_claude_code_get_onboarding_status() -> AppResult<IpcResult
         .and_then(|v| v.get("hasCompletedOnboarding").and_then(|x| x.as_bool()))
         .unwrap_or(false);
 
-    Ok(IpcResult::ok(json!({ "hasCompletedOnboarding": completed })))
+    Ok(IpcResult::ok(
+        json!({ "hasCompletedOnboarding": completed }),
+    ))
 }
 
 #[tauri::command(rename_all = "camelCase")]

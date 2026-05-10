@@ -19,7 +19,12 @@ fn run_git_output(cwd: &str, args: &[&str]) -> Option<String> {
 pub async fn git_get_branches(project_path: String) -> AppResult<IpcResult<Vec<String>>> {
     let branches = tokio::task::spawn_blocking(move || -> Vec<String> {
         run_git_output(&project_path, &["branch", "--format=%(refname:short)"])
-            .map(|s| s.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+            .map(|s| {
+                s.lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     })
     .await
@@ -33,39 +38,43 @@ pub async fn git_get_branches_with_info(project_path: String) -> AppResult<IpcRe
         let current = run_git_output(&project_path, &["rev-parse", "--abbrev-ref", "HEAD"])
             .unwrap_or_default();
 
-        let mut all: Vec<Value> = run_git_output(&project_path, &["branch", "--format=%(refname:short)"])
-            .map(|s| {
-                s.lines()
-                    .map(|l| l.trim().to_string())
-                    .filter(|l| !l.is_empty())
-                    .map(|name| {
-                        json!({
-                            "name": name,
-                            "type": "local",
-                            "displayName": name,
-                            "isCurrent": name == current,
+        let mut all: Vec<Value> =
+            run_git_output(&project_path, &["branch", "--format=%(refname:short)"])
+                .map(|s| {
+                    s.lines()
+                        .map(|l| l.trim().to_string())
+                        .filter(|l| !l.is_empty())
+                        .map(|name| {
+                            json!({
+                                "name": name,
+                                "type": "local",
+                                "displayName": name,
+                                "isCurrent": name == current,
+                            })
                         })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+                        .collect()
+                })
+                .unwrap_or_default();
 
-        let remote: Vec<Value> = run_git_output(&project_path, &["branch", "-r", "--format=%(refname:short)"])
-            .map(|s| {
-                s.lines()
-                    .map(|l| l.trim().to_string())
-                    .filter(|l| !l.is_empty() && !l.ends_with("/HEAD"))
-                    .map(|name| {
-                        json!({
-                            "name": name,
-                            "type": "remote",
-                            "displayName": name,
-                            "isCurrent": false,
-                        })
+        let remote: Vec<Value> = run_git_output(
+            &project_path,
+            &["branch", "-r", "--format=%(refname:short)"],
+        )
+        .map(|s| {
+            s.lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty() && !l.ends_with("/HEAD"))
+                .map(|name| {
+                    json!({
+                        "name": name,
+                        "type": "remote",
+                        "displayName": name,
+                        "isCurrent": false,
                     })
-                    .collect()
-            })
-            .unwrap_or_default();
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
         all.extend(remote);
         json!(all)
@@ -136,7 +145,9 @@ pub async fn git_check_status(project_path: String) -> AppResult<IpcResult<Value
                     "changeCount": count,
                 })
             }
-            _ => json!({ "isGitRepo": false, "changes": [], "hasChanges": false, "changeCount": 0 }),
+            _ => {
+                json!({ "isGitRepo": false, "changes": [], "hasChanges": false, "changeCount": 0 })
+            }
         }
     })
     .await
@@ -162,6 +173,10 @@ pub async fn git_initialize(project_path: String) -> AppResult<IpcResult<Value>>
     if ok {
         Ok(IpcResult::ok(json!({ "initialized": true })))
     } else {
-        Ok(IpcResult { success: false, data: None, error: Some("git_init_failed".to_string()) })
+        Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("git_init_failed".to_string()),
+        })
     }
 }

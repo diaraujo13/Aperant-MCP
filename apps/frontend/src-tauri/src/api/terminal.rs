@@ -170,8 +170,10 @@ pub async fn terminal_create(
             }
         }
         // Notify the renderer the PTY closed so the UI can clean up its state.
-        let _ = app_handle_for_reader
-            .emit("terminal:exit", json!({ "id": id_for_reader, "code": null }));
+        let _ = app_handle_for_reader.emit(
+            "terminal:exit",
+            json!({ "id": id_for_reader, "code": null }),
+        );
     });
 
     let terminal = Terminal {
@@ -197,9 +199,9 @@ pub async fn terminal_input(
     terminals: State<'_, Terminals>,
 ) -> AppResult<()> {
     let map = terminals.lock().await;
-    let term = map.get(&id).ok_or_else(|| {
-        AppError::new("terminal_not_found", format!("No terminal with id {id}"))
-    })?;
+    let term = map
+        .get(&id)
+        .ok_or_else(|| AppError::new("terminal_not_found", format!("No terminal with id {id}")))?;
     let writer = Arc::clone(&term.writer);
     drop(map); // release map lock before potentially-blocking write
 
@@ -226,9 +228,9 @@ pub async fn terminal_resize(
     terminals: State<'_, Terminals>,
 ) -> AppResult<IpcResult<ResizeResult>> {
     let map = terminals.lock().await;
-    let term = map.get(&id).ok_or_else(|| {
-        AppError::new("terminal_not_found", format!("No terminal with id {id}"))
-    })?;
+    let term = map
+        .get(&id)
+        .ok_or_else(|| AppError::new("terminal_not_found", format!("No terminal with id {id}")))?;
     let success = term
         .master
         .resize(PtySize {
@@ -247,9 +249,9 @@ pub async fn terminal_destroy(
     terminals: State<'_, Terminals>,
 ) -> AppResult<IpcResult<()>> {
     let mut map = terminals.lock().await;
-    let mut term = map.remove(&id).ok_or_else(|| {
-        AppError::new("terminal_not_found", format!("No terminal with id {id}"))
-    })?;
+    let mut term = map
+        .remove(&id)
+        .ok_or_else(|| AppError::new("terminal_not_found", format!("No terminal with id {id}")))?;
     drop(map);
 
     // Order matters: kill the child process first so EOF reaches the reader,
@@ -289,7 +291,9 @@ mod tests {
     fn default_shell_picks_per_os() {
         let shell = default_shell();
         if cfg!(target_os = "windows") {
-            assert!(shell.to_lowercase().contains("cmd") || shell.to_lowercase().contains("powershell"));
+            assert!(
+                shell.to_lowercase().contains("cmd") || shell.to_lowercase().contains("powershell")
+            );
         } else {
             // Either $SHELL value or /bin/bash fallback
             assert!(shell.starts_with('/') || shell.contains("sh"));

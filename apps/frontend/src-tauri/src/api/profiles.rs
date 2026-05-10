@@ -44,8 +44,7 @@ fn write_api_profiles(data: &Value) -> AppResult<()> {
 
     let text = serde_json::to_string_pretty(data)
         .map_err(|e| AppError::new("serialize_failed", e.to_string()))?;
-    std::fs::write(&path, &text)
-        .map_err(|e| AppError::new("write_failed", e.to_string()))?;
+    std::fs::write(&path, &text).map_err(|e| AppError::new("write_failed", e.to_string()))?;
 
     // Restrict to owner-read/write only (0600) — file contains API keys.
     #[cfg(unix)]
@@ -71,7 +70,9 @@ pub(crate) fn read_profiles() -> Value {
         Err(_) => return json!({ "profiles": [], "activeProfileId": "" }),
     };
     let s = settings::read_settings_at(&path);
-    s.get("claudeProfiles").cloned().unwrap_or_else(|| json!({ "profiles": [], "activeProfileId": "" }))
+    s.get("claudeProfiles")
+        .cloned()
+        .unwrap_or_else(|| json!({ "profiles": [], "activeProfileId": "" }))
 }
 
 fn save_profiles(data: &Value) -> AppResult<()> {
@@ -92,12 +93,18 @@ pub async fn claude_profiles_get() -> AppResult<IpcResult<Value>> {
 pub async fn claude_profile_save(profile: Value) -> AppResult<IpcResult<Value>> {
     let saved = tokio::task::spawn_blocking(move || -> AppResult<Value> {
         let mut data = read_profiles();
-        let profiles = data.get_mut("profiles")
+        let profiles = data
+            .get_mut("profiles")
             .and_then(|v| v.as_array_mut())
-            .ok_or_else(|| AppError::new("invalid_profiles", "profiles field missing or not array"))?;
+            .ok_or_else(|| {
+                AppError::new("invalid_profiles", "profiles field missing or not array")
+            })?;
 
         // If profile has an id, update existing; otherwise add new
-        let profile_id = profile.get("id").and_then(|v| v.as_str()).map(String::from)
+        let profile_id = profile
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(String::from)
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         let mut profile = profile.clone();
@@ -105,7 +112,10 @@ pub async fn claude_profile_save(profile: Value) -> AppResult<IpcResult<Value>> 
             obj.insert("id".to_string(), json!(profile_id));
         }
 
-        if let Some(existing) = profiles.iter_mut().find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&profile_id)) {
+        if let Some(existing) = profiles
+            .iter_mut()
+            .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&profile_id))
+        {
             *existing = profile.clone();
         } else {
             profiles.push(profile.clone());
@@ -134,7 +144,10 @@ pub async fn claude_profile_delete(profile_id: String) -> AppResult<IpcResult<()
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn claude_profile_rename(profile_id: String, new_name: String) -> AppResult<IpcResult<()>> {
+pub async fn claude_profile_rename(
+    profile_id: String,
+    new_name: String,
+) -> AppResult<IpcResult<()>> {
     tokio::task::spawn_blocking(move || -> AppResult<()> {
         let mut data = read_profiles();
         if let Some(profiles) = data.get_mut("profiles").and_then(|v| v.as_array_mut()) {
@@ -169,23 +182,46 @@ pub async fn claude_profile_set_active(profile_id: String) -> AppResult<IpcResul
 
 // Stub commands for complex profile operations (require terminal/keychain)
 #[tauri::command(rename_all = "camelCase")]
-pub async fn claude_profile_switch(_terminal_id: String, _profile_id: String) -> AppResult<IpcResult<()>> {
-    Ok(IpcResult { success: false, data: None, error: Some("profile_switch_not_ported".to_string()) })
+pub async fn claude_profile_switch(
+    _terminal_id: String,
+    _profile_id: String,
+) -> AppResult<IpcResult<()>> {
+    Ok(IpcResult {
+        success: false,
+        data: None,
+        error: Some("profile_switch_not_ported".to_string()),
+    })
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_profile_initialize(_profile_id: String) -> AppResult<IpcResult<()>> {
-    Ok(IpcResult { success: false, data: None, error: Some("profile_initialize_not_ported".to_string()) })
+    Ok(IpcResult {
+        success: false,
+        data: None,
+        error: Some("profile_initialize_not_ported".to_string()),
+    })
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn claude_profile_set_token(_profile_id: String, _token: String, _email: Option<String>) -> AppResult<IpcResult<()>> {
-    Ok(IpcResult { success: false, data: None, error: Some("profile_set_token_not_ported".to_string()) })
+pub async fn claude_profile_set_token(
+    _profile_id: String,
+    _token: String,
+    _email: Option<String>,
+) -> AppResult<IpcResult<()>> {
+    Ok(IpcResult {
+        success: false,
+        data: None,
+        error: Some("profile_set_token_not_ported".to_string()),
+    })
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_profile_authenticate(_profile_id: String) -> AppResult<IpcResult<Value>> {
-    Ok(IpcResult { success: false, data: None, error: Some("profile_authenticate_not_ported".to_string()) })
+    Ok(IpcResult {
+        success: false,
+        data: None,
+        error: Some("profile_authenticate_not_ported".to_string()),
+    })
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -198,10 +234,16 @@ pub async fn claude_profile_verify_auth(profile_id: String) -> AppResult<IpcResu
             for p in profiles {
                 if p.get("id").and_then(|v| v.as_str()) == Some(&profile_id) {
                     // Check oauth token presence
-                    let has_token = p.get("oauthToken").and_then(|v| v.as_str()).map(|t| !t.is_empty()).unwrap_or(false);
+                    let has_token = p
+                        .get("oauthToken")
+                        .and_then(|v| v.as_str())
+                        .map(|t| !t.is_empty())
+                        .unwrap_or(false);
 
                     // Check configDir credentials if present
-                    let config_dir_ok = p.get("configDir").and_then(|v| v.as_str())
+                    let config_dir_ok = p
+                        .get("configDir")
+                        .and_then(|v| v.as_str())
                         .map(|dir| {
                             std::path::Path::new(dir).join(".credentials.json").exists()
                                 || std::path::Path::new(dir).join("credentials.json").exists()
@@ -225,13 +267,15 @@ pub async fn claude_profile_verify_auth(profile_id: String) -> AppResult<IpcResu
 pub async fn claude_auto_switch_get() -> AppResult<IpcResult<Value>> {
     let path = settings::settings_path()?;
     let s = settings::read_settings_at(&path);
-    let auto_switch = s.get("claudeAutoSwitch").cloned().unwrap_or_else(|| json!({
-        "enabled": false,
-        "proactiveSwapEnabled": false,
-        "usageCheckInterval": 30000,
-        "sessionThreshold": 95,
-        "weeklyThreshold": 99,
-    }));
+    let auto_switch = s.get("claudeAutoSwitch").cloned().unwrap_or_else(|| {
+        json!({
+            "enabled": false,
+            "proactiveSwapEnabled": false,
+            "usageCheckInterval": 30000,
+            "sessionThreshold": 95,
+            "weeklyThreshold": 99,
+        })
+    });
     Ok(IpcResult::ok(auto_switch))
 }
 
@@ -264,7 +308,8 @@ pub async fn api_profile_save(profile: Value) -> AppResult<IpcResult<Value>> {
 
         let now = now_ms_profiles();
         let mut p = profile.clone();
-        let obj = p.as_object_mut()
+        let obj = p
+            .as_object_mut()
             .ok_or_else(|| AppError::new("invalid_profile", "profile must be an object"))?;
 
         // Validate `kind` discriminator (Phase 6d). Default to "anthropic" so
@@ -274,7 +319,12 @@ pub async fn api_profile_save(profile: Value) -> AppResult<IpcResult<Value>> {
                 obj.insert("kind".into(), json!("anthropic"));
             }
             Some("anthropic") | Some("codex") => {}
-            Some(_) => return Err(AppError::new("invalid_kind", "kind must be 'anthropic' or 'codex'")),
+            Some(_) => {
+                return Err(AppError::new(
+                    "invalid_kind",
+                    "kind must be 'anthropic' or 'codex'",
+                ))
+            }
         }
 
         let id = obj
@@ -309,7 +359,10 @@ pub async fn api_profile_update(profile: Value) -> AppResult<IpcResult<Value>> {
         // Validate `kind` if present (Phase 6d).
         if let Some(k) = profile.get("kind").and_then(|v| v.as_str()) {
             if k != "anthropic" && k != "codex" {
-                return Err(AppError::new("invalid_kind", "kind must be 'anthropic' or 'codex'"));
+                return Err(AppError::new(
+                    "invalid_kind",
+                    "kind must be 'anthropic' or 'codex'",
+                ));
             }
         }
 
@@ -339,7 +392,10 @@ pub async fn api_profile_update(profile: Value) -> AppResult<IpcResult<Value>> {
         }
 
         if !found {
-            return Err(AppError::new("not_found", format!("profile {} not found", profile_id)));
+            return Err(AppError::new(
+                "not_found",
+                format!("profile {} not found", profile_id),
+            ));
         }
 
         write_api_profiles(&store)?;
@@ -409,9 +465,9 @@ pub async fn api_profile_test_connection(
         .await;
 
     match models_res {
-        Ok(r) if r.status().is_success() => {
-            Ok(IpcResult::ok(json!({ "success": true, "message": "Connection successful" })))
-        }
+        Ok(r) if r.status().is_success() => Ok(IpcResult::ok(
+            json!({ "success": true, "message": "Connection successful" }),
+        )),
         Ok(r) if r.status().as_u16() == 404 => {
             // Endpoint doesn't expose /v1/models — probe /v1/messages instead.
             let messages_res = client
@@ -424,32 +480,32 @@ pub async fn api_profile_test_connection(
                 .await;
 
             match messages_res {
-                Ok(r) if matches!(r.status().as_u16(), 200 | 400 | 422) => {
-                    Ok(IpcResult::ok(json!({ "success": true, "message": "Connection successful" })))
-                }
-                Ok(r) if r.status().as_u16() == 401 => {
-                    Ok(IpcResult::ok(json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" })))
-                }
-                Ok(r) => {
-                    Ok(IpcResult::ok(json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) })))
-                }
-                Err(e) => {
-                    Ok(IpcResult::ok(json!({ "success": false, "errorType": "network", "message": e.to_string() })))
-                }
+                Ok(r) if matches!(r.status().as_u16(), 200 | 400 | 422) => Ok(IpcResult::ok(
+                    json!({ "success": true, "message": "Connection successful" }),
+                )),
+                Ok(r) if r.status().as_u16() == 401 => Ok(IpcResult::ok(
+                    json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" }),
+                )),
+                Ok(r) => Ok(IpcResult::ok(
+                    json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) }),
+                )),
+                Err(e) => Ok(IpcResult::ok(
+                    json!({ "success": false, "errorType": "network", "message": e.to_string() }),
+                )),
             }
         }
-        Ok(r) if r.status().as_u16() == 401 => {
-            Ok(IpcResult::ok(json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" })))
-        }
-        Ok(r) => {
-            Ok(IpcResult::ok(json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) })))
-        }
-        Err(e) if e.is_timeout() => {
-            Ok(IpcResult::ok(json!({ "success": false, "errorType": "timeout", "message": "Connection timed out" })))
-        }
-        Err(e) => {
-            Ok(IpcResult::ok(json!({ "success": false, "errorType": "network", "message": e.to_string() })))
-        }
+        Ok(r) if r.status().as_u16() == 401 => Ok(IpcResult::ok(
+            json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" }),
+        )),
+        Ok(r) => Ok(IpcResult::ok(
+            json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) }),
+        )),
+        Err(e) if e.is_timeout() => Ok(IpcResult::ok(
+            json!({ "success": false, "errorType": "timeout", "message": "Connection timed out" }),
+        )),
+        Err(e) => Ok(IpcResult::ok(
+            json!({ "success": false, "errorType": "network", "message": e.to_string() }),
+        )),
     }
 }
 
@@ -477,10 +533,7 @@ pub async fn api_profile_discover_models(
         return Ok(IpcResult::ok(json!({ "models": [] })));
     }
 
-    let body: Value = res
-        .json()
-        .await
-        .unwrap_or_else(|_| json!({ "data": [] }));
+    let body: Value = res.json().await.unwrap_or_else(|_| json!({ "data": [] }));
 
     // Anthropic returns `{ "data": [{ "id": "...", "display_name": "..." }] }`.
     let models: Vec<Value> = body
