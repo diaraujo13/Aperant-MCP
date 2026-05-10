@@ -8,6 +8,7 @@ import type {
   ImplementationPlan,
   TaskExitReason,
   TaskRateLimitInfo,
+  TaskStatus,
 } from "../../shared/types";
 import { XSTATE_SETTLED_STATES, XSTATE_TO_PHASE, mapStateToLegacy } from "../../shared/state-machines";
 import { AgentManager } from "../agent";
@@ -516,6 +517,10 @@ export function registerAgenteventsHandlers(
     const result = findTaskAndProject(taskId, projectId);
     if (result) {
       const { task, project } = result;
+      if (!task || !project) {
+        console.warn(`[AgentEvents] force-recovery-revert: task or project missing for ${taskId}`);
+        return;
+      }
 
       // Clear forceRecovery from plan files BEFORE sending XState event.
       // The guard in persistPlanStatusAndReasonSync blocks writes when forceRecovery is active.

@@ -433,7 +433,7 @@ export interface TaskInfo {
   status: string;
   reviewReason?: string;
   description?: string;
-  subtasks?: Array<{ status: string; name?: string }>;
+  subtasks?: Array<{ status: string; name?: string; id?: string; title?: string }>;
   phases?: Array<{ subtasks?: Array<{ status: string; updated_at?: string }> }>;
   exitReason?: string;
   planStatus?: string;
@@ -2308,7 +2308,7 @@ export function registerRdrHandlers(agentManager?: AgentManager): void {
       status: string;
       reviewReason?: string;
       description?: string;
-      subtasks?: Array<{ status: string; name?: string }>;
+      subtasks?: Array<{ status: string; name?: string; id?: string; title?: string }>;
     }>): Promise<IPCResult<{ taskCount: number; signalPath: string }>> => {
       console.log(`[RDR] Ping immediate - ${tasks.length} tasks from project ${projectId}`);
 
@@ -2717,7 +2717,7 @@ export function registerRdrHandlers(agentManager?: AgentManager): void {
               lastSubtaskIndex
             },
             subtasks: task.subtasks?.map((s) => ({
-              name: s.title || s.id,
+              name: s.title || s.id || ('name' in s ? s.name : undefined) || '',
               status: s.status
             })),
             errorSummary,

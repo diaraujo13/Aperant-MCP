@@ -102,7 +102,10 @@ describe('powershell-runner', () => {
       },
     });
 
-    const [, args] = vi.mocked(spawnSync).mock.calls[0];
+    const call = vi.mocked(spawnSync).mock.calls[0];
+    if (!call) throw new Error('spawnSync was not called');
+    const args = call[1];
+    if (!args) throw new Error('spawnSync called without args');
     const fileFlagIndex = args.indexOf('-File');
     const scriptPath = args[fileFlagIndex + 1];
 

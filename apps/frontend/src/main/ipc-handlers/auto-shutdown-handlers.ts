@@ -554,9 +554,9 @@ ipcMain.handle(
   async (_): Promise<IPCResult<void>> => {
     try {
       // Kill global monitor process if running
-      const process = monitorProcesses.get('global');
-      if (process) {
-        process.kill();
+      const monitorProc = monitorProcesses.get('global');
+      if (monitorProc) {
+        monitorProc.kill();
         monitorProcesses.delete('global');
       }
 

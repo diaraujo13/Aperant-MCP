@@ -1614,7 +1614,7 @@ server.tool(
                 'For programmatic access to logs, the MCP server must run within the Electron app context.',
           taskStatus: statusResult.data.status,
           executionPhase: statusResult.data.executionProgress?.phase || 'unknown',
-          subtasksStatus: statusResult.data.subtasks?.map((s: { id: string; title: string; status: string }) => ({
+          subtasksStatus: statusResult.data.subtasks?.map((s) => ({
             id: s.id,
             title: s.title,
             status: s.status
@@ -2127,7 +2127,7 @@ server.tool(
 
       const settings = readSettingsFile();
 
-      if (!settings.autoRestartOnFailure?.enabled) {
+      if (!settings?.autoRestartOnFailure?.enabled) {
         return {
           content: [{
             type: 'text' as const,
@@ -2151,7 +2151,7 @@ server.tool(
 
       // Import and call buildAndRestart
       const { buildAndRestart } = await import('../ipc-handlers/restart-handlers.js');
-      const cmd = buildCommand || settings.autoRestartOnFailure.buildCommand || 'npm run build';
+      const cmd = buildCommand || settings.autoRestartOnFailure?.buildCommand || 'npm run build';
 
       // Note: Task state will be saved by checkAndHandleRestart when app restarts and detects marker file
       console.log('[MCP] Triggering build and restart with command:', cmd);
