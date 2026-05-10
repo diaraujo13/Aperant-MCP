@@ -701,6 +701,29 @@ aarch64 (8.8 MB binary, 8.2 MB DMG vs ~100+ MB Electron). Cross-platform CI
 matrix in `.github/workflows/tauri-build.yml` validates Linux + Windows +
 both macOS architectures on every push touching `src-tauri/` or the renderer.
 
+**Releasing a Tauri build:**
+
+```bash
+# 1. Bump version in BOTH apps/frontend/src-tauri/tauri.conf.json
+#    and apps/frontend/src-tauri/Cargo.toml (must match).
+# 2. Tag with the tauri-v* prefix (separate from the v* Electron tags
+#    so the two release pipelines never collide):
+git tag tauri-v0.2.0-beta.0
+git push origin tauri-v0.2.0-beta.0
+# 3. .github/workflows/tauri-release.yml builds 4 platforms via
+#    tauri-action and creates a draft GitHub release with the bundles.
+#    macOS notarization activates only when APPLE_* secrets are present.
+#    Windows Authenticode is not yet wired (follow-up).
+```
+
+**Tests:**
+
+| Layer | Command | Purpose |
+| --- | --- | --- |
+| Rust unit | `cd apps/frontend/src-tauri && cargo test` | Tauri command logic |
+| Shim unit | `npx vitest run src/preload/__tests__/electron-shim.test.ts` | invoke routing + stub fallback |
+| Bundle smoke | `npm run test:e2e:tauri` | Production bundle loads without 404s/JS errors |
+
 Renderer uses a Proxy-based shim (`src/preload/electron-shim.ts`) that
 mounts `window.electronAPI` and routes ported calls through Tauri `invoke()`
 while gracefully stubbing un-ported methods (logged as `[shim] stub: NAME`
