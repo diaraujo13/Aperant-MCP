@@ -83,35 +83,14 @@ jobs:
       - name: Install workspace deps (root, npm workspaces)
         run: npm ci
 
-      # tauri-action interprets APPLE_CERTIFICATE="" (set-but-empty) as
-      # "import this cert", which fails when the secret is unset. Two-step
-      # pattern: signed branch only when APPLE_CERTIFICATE is non-empty,
-      # unsigned branch otherwise. Each tauri-v* tag matches exactly one.
-      - name: Build + bundle + sign + publish (signed, macOS notarized)
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        with:
-          projectPath: apps/frontend
-          tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
-          releaseName: 'Tauri ${{ github.event.inputs.tag_name || github.ref_name }}'
-          releaseBody: |
-            Tauri 2 production bundle for Aperant-MCP. Built from `${{ github.sha }}`.
-            macOS bundles are signed/notarized.
-          releaseDraft: true
-          prerelease: true
-          includeUpdaterJson: false
-          args: --target ${{ matrix.platform.rust_target }}
-
-      - name: Build + bundle + publish (unsigned, no Apple secrets)
-        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+      # NOTE: Apple signing/notarization intentionally NOT wired here.
+      # tauri-action interprets APPLE_CERTIFICATE="" (the value of an unset
+      # secret) as "import this cert" and fails before bundling. To enable
+      # notarization later: add APPLE_CERTIFICATE + APPLE_CERTIFICATE_PASSWORD
+      # + APPLE_SIGNING_IDENTITY + APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+      # + APPLE_TEAM_ID as repo secrets, then re-add an `env:` block with
+      # those variables to this step.
+      - name: Build + bundle + publish via tauri-action (unsigned)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -122,10 +101,9 @@ jobs:
           releaseBody: |
             Tauri 2 production bundle for Aperant-MCP. Built from `${{ github.sha }}`.
 
-            **Unsigned build** — Apple/Windows signing secrets are not yet
-            configured. macOS will show "developer not verified" on first
-            launch (use Right-click → Open). Add APPLE_CERTIFICATE and
-            related secrets to the repo to enable notarization automatically.
+            **Unsigned build.** macOS shows "developer not verified" on first
+            launch (Right-click → Open). To enable notarization, add Apple
+            secrets per .github/workflows/tauri-release.yml header.
           releaseDraft: true
           prerelease: true
           includeUpdaterJson: false
