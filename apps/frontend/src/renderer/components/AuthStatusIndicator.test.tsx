@@ -56,13 +56,28 @@ vi.mock('react-i18next', () => ({
  * @returns Complete mock settings store object
  */
 function createUseSettingsStoreMock(overrides?: Partial<ReturnType<typeof useSettingsStore>>) {
+  // Mirror each test profile as an openai-compatible ProviderAccount linked
+  // via apiProfileId — AuthStatusIndicator now resolves the active account
+  // through providerAccounts, then falls back to OAUTH ("Claude Code") if
+  // none match. The test profiles each represent an API-key flow.
+  const providerAccounts = testProfiles.map((p) => ({
+    id: `acc-${p.id}`,
+    provider: 'openai-compatible' as const,
+    name: p.name,
+    authType: 'api-key' as const,
+    billingModel: 'pay-per-use' as const,
+    baseUrl: p.baseUrl,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    apiProfileId: p.id,
+  }));
   return {
     profiles: testProfiles,
     activeProfileId: null,
     deleteProfile: vi.fn().mockResolvedValue(true),
     setActiveProfile: vi.fn().mockResolvedValue(true),
     profilesLoading: false,
-    settings: {} as any,
+    settings: { providerAccounts } as any,
     isLoading: false,
     error: null,
     setSettings: vi.fn(),
