@@ -1,0 +1,108 @@
+# Tauri Cross-Platform Build
+#
+# Validates that the Tauri 2 production bundle compiles on all three target
+# platforms. Does not sign or publish — that lives in release.yml when the
+# Tauri shell takes over from Electron.
+#
+# Triggers on tauri-migration branch and on changes touching the Rust shell,
+# the Vite-Tauri renderer config, or this workflow itself.
+
+name: Tauri Build
+
+on:
+  push:
+    branches: [tauri-migration, develop, main]
+    paths:
+      - 'apps/frontend/src-tauri/**'
+      - 'apps/frontend/src/**'
+      - 'apps/frontend/vite.tauri.config.ts'
+      - 'apps/frontend/package.json'
+      - 'apps/frontend/package-lock.json'
+      - '.github/workflows/tauri-build.yml'
+  pull_request:
+    branches: [tauri-migration, develop, main]
+    paths:
+      - 'apps/frontend/src-tauri/**'
+      - 'apps/frontend/src/**'
+      - 'apps/frontend/vite.tauri.config.ts'
+      - 'apps/frontend/package.json'
+      - 'apps/frontend/package-lock.json'
+      - '.github/workflows/tauri-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: tauri-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: macos-aarch64, os: macos-14 }
+          - { name: macos-x86_64,  os: macos-13 }
+          - { name: linux-x86_64,  os: ubuntu-22.04 }
+          - { name: windows-x86_64, os: windows-2022 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system dependencies
+        if: matrix.platform.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'apps/frontend/package-lock.json'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/frontend/src-tauri/target
+          key: cargo-${{ matrix.platform.name }}-${{ hashFiles('apps/frontend/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ matrix.platform.name }}-
+
+      - name: Install frontend deps
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Cargo check (fast fail gate)
+        working-directory: apps/frontend/src-tauri
+        run: cargo check --release --locked
+
+      - name: Tauri build (no bundle, runs beforeBuildCommand)
+        working-directory: apps/frontend
+        run: npx tauri build --no-bundle
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-binary-${{ matrix.platform.name }}
+          path: |
+            apps/frontend/src-tauri/target/release/auto-claude-tauri
+            apps/frontend/src-tauri/target/release/auto-claude-tauri.exe
+          if-no-files-found: warn
+          retention-days: 7
