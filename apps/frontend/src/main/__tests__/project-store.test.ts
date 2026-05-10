@@ -12,14 +12,33 @@ let TEST_DIR: string;
 let USER_DATA_PATH: string;
 let TEST_PROJECT_PATH: string;
 
-// Mock Electron before importing the store
+// Mock Electron before importing the store. Must include `ipcMain` because
+// project-store transitively imports sentry.ts which does
+// `import { app, ipcMain } from 'electron'`. Also stub @sentry/electron/main
+// so the test environment doesn't need to resolve the real Sentry runtime.
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn((name: string) => {
       if (name === 'userData') return USER_DATA_PATH;
       return TEST_DIR;
     })
+  },
+  ipcMain: {
+    on: vi.fn(),
+    handle: vi.fn(),
+    removeAllListeners: vi.fn(),
+    removeHandler: vi.fn(),
   }
+}));
+
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  setUser: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  addBreadcrumb: vi.fn(),
 }));
 
 // Setup test directories with unique secure temp dir
