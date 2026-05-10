@@ -91,8 +91,16 @@ fn build_codex_env(p: &Value) -> Option<(String, Vec<(String, String)>)> {
     if api_key.is_empty() {
         return None;
     }
+    // Emit the env contract the existing Python orchestration already reads:
+    //   - APERANT_AI_PROVIDER=openai   → triggers CodexCLIClient in
+    //     core/client.py + core/simple_client.py
+    //   - APERANT_CODEX_CLI_PATH       → optional codex binary override
+    //   - OPENAI_API_KEY               → consumed directly by `codex` CLI
+    //   - AUTO_CLAUDE_PROVIDER=codex   → kept as alias for the Phase 6e
+    //     Provider abstraction (get_active_provider reads it)
     let mut env = vec![
         ("OPENAI_API_KEY".to_string(), api_key.to_string()),
+        ("APERANT_AI_PROVIDER".to_string(), "openai".to_string()),
         ("AUTO_CLAUDE_PROVIDER".to_string(), "codex".to_string()),
     ];
     if let Some(model) = p.get("model").and_then(|v| v.as_str()) {
@@ -102,6 +110,7 @@ fn build_codex_env(p: &Value) -> Option<(String, Vec<(String, String)>)> {
     }
     if let Some(binary) = p.get("binary").and_then(|v| v.as_str()) {
         if !binary.is_empty() {
+            env.push(("APERANT_CODEX_CLI_PATH".to_string(), binary.to_string()));
             env.push(("AUTO_CLAUDE_CODEX_BINARY".to_string(), binary.to_string()));
         }
     }
@@ -526,5 +535,37 @@ mod tests {
             .env
             .iter()
             .any(|(k, v)| k == "AUTO_CLAUDE_CODEX_BINARY" && v == "/usr/local/bin/codex"));
+        // Harmonization: also emits APERANT_CODEX_CLI_PATH so the existing
+        // core/client.py CodexCLIClient dispatch picks up the override.
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "APERANT_CODEX_CLI_PATH" && v == "/usr/local/bin/codex"));
+    }
+
+    #[test]
+    fn resolve_codex_emits_aperant_provider_for_existing_dispatch() {
+        // The pre-existing core/client.py and core/simple_client.py read
+        // APERANT_AI_PROVIDER==openai to dispatch to CodexCLIClient. Profile
+        // env injection MUST emit this var or Codex profiles silently fall
+        // through to the Anthropic SDK path with no auth.
+        let src = StaticSource {
+            api: json!({
+                "profiles": [
+                    { "id": "cx1", "kind": "codex", "apiKey": "sk-ok" }
+                ],
+                "activeProfileId": "cx1"
+            }),
+            oauth: empty_oauth(),
+        };
+        let r = resolve_with(&src, &[]).unwrap();
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "APERANT_AI_PROVIDER" && v == "openai"));
+        assert!(r
+            .env
+            .iter()
+            .any(|(k, v)| k == "OPENAI_API_KEY" && v == "sk-ok"));
     }
 }

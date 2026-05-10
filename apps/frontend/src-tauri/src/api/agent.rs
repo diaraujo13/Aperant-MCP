@@ -107,6 +107,8 @@ pub(crate) fn apply_profile_env(
     // doesn't leak OPENAI_API_KEY / provider sentinel into Anthropic spawns.
     const CODEX_VARS: &[&str] = &[
         "OPENAI_API_KEY",
+        "APERANT_AI_PROVIDER",
+        "APERANT_CODEX_CLI_PATH",
         "AUTO_CLAUDE_PROVIDER",
         "AUTO_CLAUDE_CODEX_MODEL",
         "AUTO_CLAUDE_CODEX_BINARY",

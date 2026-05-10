@@ -2,10 +2,13 @@
 OpenAI Codex CLI is a fallback used when an Anthropic profile is rate-limited
 and rotation falls through to a Codex profile (see Rust agent::profile_env).
 
-Provider selection is driven by the AUTO_CLAUDE_PROVIDER env var, set by Rust
-at spawn time. Default "anthropic". Code paths that need a one-shot LLM call
-should route through `get_active_provider()` rather than instantiating clients
-directly.
+Provider selection is driven by env vars set by Rust at spawn time. Either
+discriminator triggers Codex mode (Rust emits both for compatibility with
+the existing core/client.py::create_client dispatch that predates this work):
+  - APERANT_AI_PROVIDER=openai   (canonical, read by core/client.py)
+  - AUTO_CLAUDE_PROVIDER=codex   (Phase 6e alias)
+Default "anthropic". Code paths that need a one-shot LLM call should route
+through `get_active_provider()` rather than instantiating clients directly.
 
 SDK features lost in Codex mode (deferred to Phase 6f):
 - PreToolUse / PostToolUse hooks (Codex has no equivalent — security validation
@@ -37,8 +40,9 @@ def get_active_provider() -> Provider:
     global _provider_cache
     if _provider_cache is not None:
         return _provider_cache
-    kind = os.environ.get("AUTO_CLAUDE_PROVIDER", "anthropic").strip().lower()
-    if kind == "codex":
+    aperant = os.environ.get("APERANT_AI_PROVIDER", "").strip().lower()
+    auto_claude = os.environ.get("AUTO_CLAUDE_PROVIDER", "").strip().lower()
+    if aperant == "openai" or auto_claude == "codex":
         from .codex import CodexProvider
 
         _provider_cache = CodexProvider()

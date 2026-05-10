@@ -33,8 +33,18 @@ def _reset_cache():
 
 def test_get_active_provider_default_is_anthropic(monkeypatch):
     monkeypatch.delenv("AUTO_CLAUDE_PROVIDER", raising=False)
+    monkeypatch.delenv("APERANT_AI_PROVIDER", raising=False)
     provider = get_active_provider()
     assert provider.name == "anthropic"
+
+
+def test_get_active_provider_codex_via_aperant_var(monkeypatch):
+    """The pre-existing core/client.py dispatch reads APERANT_AI_PROVIDER.
+    Profile env injection emits both vars; either should select Codex."""
+    monkeypatch.delenv("AUTO_CLAUDE_PROVIDER", raising=False)
+    monkeypatch.setenv("APERANT_AI_PROVIDER", "openai")
+    provider = get_active_provider()
+    assert provider.name == "codex"
 
 
 def test_get_active_provider_codex_when_env_set(monkeypatch):
