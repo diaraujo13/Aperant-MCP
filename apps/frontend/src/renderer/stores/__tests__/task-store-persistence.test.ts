@@ -14,7 +14,13 @@ import type { Task, TaskStatus } from '../../../shared/types';
 const mockGetTasks = vi.fn();
 const mockCreateTask = vi.fn();
 
+// Preserve jsdom window methods (addEventListener used by buffer-persistence
+// at module top-level). Replacing the full window object would crash any
+// transitive import that touches window.addEventListener / removeEventListener.
 vi.stubGlobal('window', {
+  ...globalThis.window,
+  addEventListener: globalThis.window?.addEventListener?.bind(globalThis.window) ?? vi.fn(),
+  removeEventListener: globalThis.window?.removeEventListener?.bind(globalThis.window) ?? vi.fn(),
   electronAPI: {
     getTasks: mockGetTasks,
     createTask: mockCreateTask,
