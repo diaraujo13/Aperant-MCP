@@ -83,12 +83,15 @@ jobs:
       - name: Install workspace deps (root, npm workspaces)
         run: npm ci
 
-      - name: Build + bundle + (optionally) sign + publish via tauri-action
+      # tauri-action interprets APPLE_CERTIFICATE="" (set-but-empty) as
+      # "import this cert", which fails when the secret is unset. Two-step
+      # pattern: signed branch only when APPLE_CERTIFICATE is non-empty,
+      # unsigned branch otherwise. Each tauri-v* tag matches exactly one.
+      - name: Build + bundle + sign + publish (signed, macOS notarized)
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS signing/notarization — auto-detected by tauri-action when present.
-          # If absent, bundle ships unsigned (acceptable for early adopters).
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -100,15 +103,29 @@ jobs:
           tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
           releaseName: 'Tauri ${{ github.event.inputs.tag_name || github.ref_name }}'
           releaseBody: |
-            Tauri 2 production bundle for Aperant-MCP.
+            Tauri 2 production bundle for Aperant-MCP. Built from `${{ github.sha }}`.
+            macOS bundles are signed/notarized.
+          releaseDraft: true
+          prerelease: true
+          includeUpdaterJson: false
+          args: --target ${{ matrix.platform.rust_target }}
 
-            Built from `${{ github.sha }}`.
-            See CLAUDE.md "Tauri Migration Status" for the current state of
-            the Electron → Tauri migration.
+      - name: Build + bundle + publish (unsigned, no Apple secrets)
+        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/frontend
+          tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
+          releaseName: 'Tauri ${{ github.event.inputs.tag_name || github.ref_name }}'
+          releaseBody: |
+            Tauri 2 production bundle for Aperant-MCP. Built from `${{ github.sha }}`.
 
-            **Signing:** macOS bundles are notarized when Apple secrets are
-            configured. Windows bundles are currently unsigned (Authenticode
-            integration tracked as follow-up). Linux AppImage/deb are unsigned.
+            **Unsigned build** — Apple/Windows signing secrets are not yet
+            configured. macOS will show "developer not verified" on first
+            launch (use Right-click → Open). Add APPLE_CERTIFICATE and
+            related secrets to the repo to enable notarization automatically.
           releaseDraft: true
           prerelease: true
           includeUpdaterJson: false

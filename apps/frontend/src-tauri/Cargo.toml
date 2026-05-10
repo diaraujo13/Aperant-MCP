@@ -1,6 +1,6 @@
 [package]
 name = "auto-claude-tauri"
-version = "0.2.0-beta.0"
+version = "0.2.0-0"
 edition = "2021"
 description = "Tauri 2 shell for Aperant-MCP / Auto-Claude (migration from Electron)"
 license = "AGPL-3.0"
