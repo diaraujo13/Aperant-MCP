@@ -82,7 +82,7 @@ fn save_profiles(data: &Value) -> AppResult<()> {
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_profiles_get() -> AppResult<IpcResult<Value>> {
-    let data = tokio::task::spawn_blocking(|| read_profiles())
+    let data = tokio::task::spawn_blocking(read_profiles)
         .await
         .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))?;
     Ok(IpcResult::ok(data))
@@ -410,7 +410,7 @@ pub async fn api_profile_test_connection(
 
     match models_res {
         Ok(r) if r.status().is_success() => {
-            return Ok(IpcResult::ok(json!({ "success": true, "message": "Connection successful" })));
+            Ok(IpcResult::ok(json!({ "success": true, "message": "Connection successful" })))
         }
         Ok(r) if r.status().as_u16() == 404 => {
             // Endpoint doesn't expose /v1/models — probe /v1/messages instead.
@@ -425,30 +425,30 @@ pub async fn api_profile_test_connection(
 
             match messages_res {
                 Ok(r) if matches!(r.status().as_u16(), 200 | 400 | 422) => {
-                    return Ok(IpcResult::ok(json!({ "success": true, "message": "Connection successful" })));
+                    Ok(IpcResult::ok(json!({ "success": true, "message": "Connection successful" })))
                 }
                 Ok(r) if r.status().as_u16() == 401 => {
-                    return Ok(IpcResult::ok(json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" })));
+                    Ok(IpcResult::ok(json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" })))
                 }
                 Ok(r) => {
-                    return Ok(IpcResult::ok(json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) })));
+                    Ok(IpcResult::ok(json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) })))
                 }
                 Err(e) => {
-                    return Ok(IpcResult::ok(json!({ "success": false, "errorType": "network", "message": e.to_string() })));
+                    Ok(IpcResult::ok(json!({ "success": false, "errorType": "network", "message": e.to_string() })))
                 }
             }
         }
         Ok(r) if r.status().as_u16() == 401 => {
-            return Ok(IpcResult::ok(json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" })));
+            Ok(IpcResult::ok(json!({ "success": false, "errorType": "auth", "message": "Authentication failed — check your API key" })))
         }
         Ok(r) => {
-            return Ok(IpcResult::ok(json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) })));
+            Ok(IpcResult::ok(json!({ "success": false, "errorType": "endpoint", "message": format!("Unexpected status {}", r.status()) })))
         }
         Err(e) if e.is_timeout() => {
-            return Ok(IpcResult::ok(json!({ "success": false, "errorType": "timeout", "message": "Connection timed out" })));
+            Ok(IpcResult::ok(json!({ "success": false, "errorType": "timeout", "message": "Connection timed out" })))
         }
         Err(e) => {
-            return Ok(IpcResult::ok(json!({ "success": false, "errorType": "network", "message": e.to_string() })));
+            Ok(IpcResult::ok(json!({ "success": false, "errorType": "network", "message": e.to_string() })))
         }
     }
 }
