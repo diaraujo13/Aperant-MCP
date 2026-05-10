@@ -679,14 +679,33 @@ Tools: `take_screenshot`, `click_by_text`, `fill_input`, `get_page_structure`, `
 # CLI only
 cd apps/backend && python run.py --spec 001
 
-# Desktop app
+# Desktop app — Electron (current default)
 npm start          # Production build + run
 npm run dev        # Development mode with HMR
 npm run dev:debug  # Debug mode with verbose output
 npm run dev:mcp    # Electron MCP server for AI debugging
 
+# Desktop app — Tauri 2 (migration target, branch: tauri-migration)
+cd apps/frontend
+npm run dev:tauri          # Dev mode (auto-runs Vite renderer)
+npm run build:tauri        # Production bundle (.app/.dmg/.msi/.AppImage)
+# Output: apps/frontend/src-tauri/target/release/bundle/
+
 # Project data: .auto-claude/specs/ (gitignored)
 ```
+
+### Tauri Migration Status
+
+The Tauri 2 shell builds to a fully functional production bundle on macOS
+aarch64 (8.8 MB binary, 8.2 MB DMG vs ~100+ MB Electron). Cross-platform CI
+matrix in `.github/workflows/tauri-build.yml` validates Linux + Windows +
+both macOS architectures on every push touching `src-tauri/` or the renderer.
+
+Renderer uses a Proxy-based shim (`src/preload/electron-shim.ts`) that
+mounts `window.electronAPI` and routes ported calls through Tauri `invoke()`
+while gracefully stubbing un-ported methods (logged as `[shim] stub: NAME`
+in DEV). Use `__tauriDebug.test('command_name', args)` from DevTools to
+exercise individual Rust commands.
 
 **With the Electron frontend**:
 
