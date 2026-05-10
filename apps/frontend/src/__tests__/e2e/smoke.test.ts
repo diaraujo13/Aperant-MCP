@@ -494,7 +494,7 @@ describe('E2E Smoke Tests', () => {
       const stopTask = electronAPI['stopTask'] as (id: string) => void;
       stopTask('task-001');
 
-      expect(mockIpcRenderer.send).toHaveBeenCalledWith('task:stop', 'task-001');
+      expect(mockIpcRenderer.send).toHaveBeenCalledWith('task:stop', 'task-001', undefined);
     });
 
     it('should handle task resume flow', async () => {
