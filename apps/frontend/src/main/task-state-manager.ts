@@ -103,35 +103,46 @@ export class TaskStateManager {
   }
 
   handleManualStatusChange(taskId: string, status: TaskStatus, task: Task, project: Project): boolean {
+    // Returns true if the status is *recognized and dispatched*, NOT whether
+    // the state machine transitioned. Callers (e.g. execution-handlers) use
+    // this to decide whether to fall back to manual plan-file persistence;
+    // a recognized status that landed as a no-op should still claim "handled"
+    // so the fallback doesn't double-write.
     switch (status) {
       case 'done':
-        return this.handleUiEvent(taskId, { type: 'MARK_DONE' }, task, project);
+        this.handleUiEvent(taskId, { type: 'MARK_DONE' }, task, project);
+        return true;
       case 'pr_created':
-        return this.handleUiEvent(
+        this.handleUiEvent(
           taskId,
           { type: 'PR_CREATED', prUrl: task.metadata?.prUrl ?? '' },
           task,
           project
         );
+        return true;
       case 'in_progress': {
         // Use XState as source of truth for determining correct event
         const currentState = this.getCurrentState(taskId);
         if (currentState === 'plan_review') {
-          return this.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);
+          this.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);
         } else if (currentState === 'human_review' || currentState === 'error') {
-          return this.handleUiEvent(taskId, { type: 'USER_RESUMED' }, task, project);
+          this.handleUiEvent(taskId, { type: 'USER_RESUMED' }, task, project);
         } else if (!currentState && task.reviewReason === 'plan_review') {
-          return this.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);
+          this.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);
         } else {
-          return this.handleUiEvent(taskId, { type: 'USER_RESUMED' }, task, project);
+          this.handleUiEvent(taskId, { type: 'USER_RESUMED' }, task, project);
         }
+        return true;
       }
       case 'backlog':
-        return this.handleUiEvent(taskId, { type: 'FORCE_BACKLOG' }, task, project);
+        this.handleUiEvent(taskId, { type: 'FORCE_BACKLOG' }, task, project);
+        return true;
       case 'human_review':
-        return this.handleUiEvent(taskId, { type: 'FORCE_HUMAN_REVIEW' }, task, project);
+        this.handleUiEvent(taskId, { type: 'FORCE_HUMAN_REVIEW' }, task, project);
+        return true;
       case 'ai_review':
-        return this.handleUiEvent(taskId, { type: 'FORCE_AI_REVIEW' }, task, project);
+        this.handleUiEvent(taskId, { type: 'FORCE_AI_REVIEW' }, task, project);
+        return true;
       default:
         return false;
     }
