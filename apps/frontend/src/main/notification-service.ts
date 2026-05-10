@@ -61,6 +61,30 @@ class NotificationService {
   }
 
   /**
+   * Send a generic notification (used for ad-hoc alerts like rate-limit pauses)
+   * Bypasses per-type enable checks but respects sound settings.
+   */
+  notify(title: string, body: string, opts?: { type?: 'info' | 'warning' | 'error'; projectId?: string; taskId?: string }): void {
+    const settings = this.getNotificationSettings(opts?.projectId);
+    if (Notification.isSupported()) {
+      const notification = new Notification({
+        title,
+        body,
+        silent: !settings.sound,
+      });
+      notification.on('click', () => {
+        const window = this.mainWindow?.();
+        if (window) {
+          if (window.isMinimized()) window.restore();
+          window.focus();
+        }
+      });
+      notification.show();
+    }
+    if (settings.sound) this.playNotificationSound();
+  }
+
+  /**
    * Send a system notification with optional sound
    */
   private sendNotification(type: NotificationType, options: NotificationOptions): void {

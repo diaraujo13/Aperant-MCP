@@ -12,6 +12,7 @@ import { app } from 'electron';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
+import type { AppSettings } from '../shared/types/settings';
 
 /**
  * Get the path to the settings file
@@ -44,7 +45,7 @@ export function getDefaultShutdownCommand(): string {
  * This function does NOT merge with defaults or perform any migrations.
  * Callers are responsible for merging with DEFAULT_APP_SETTINGS.
  */
-export function readSettingsFile(): Record<string, unknown> | undefined {
+export function readSettingsFile(): Partial<AppSettings> | undefined {
   const settingsPath = getSettingsPath();
 
   if (!existsSync(settingsPath)) {
