@@ -679,17 +679,19 @@ Tools: `take_screenshot`, `click_by_text`, `fill_input`, `get_page_structure`, `
 # CLI only
 cd apps/backend && python run.py --spec 001
 
-# Desktop app — Electron (current default)
-npm start          # Production build + run
-npm run dev        # Development mode with HMR
-npm run dev:debug  # Debug mode with verbose output
-npm run dev:mcp    # Electron MCP server for AI debugging
-
-# Desktop app — Tauri 2 (migration target, branch: tauri-migration)
+# Desktop app — Tauri 2 is now the DEFAULT for `dev`
 cd apps/frontend
-npm run dev:tauri          # Dev mode (auto-runs Vite renderer)
+npm run dev                # = tauri dev (default workflow)
+npm run dev:tauri          # alias of dev
 npm run build:tauri        # Production bundle (.app/.dmg/.msi/.AppImage)
 # Output: apps/frontend/src-tauri/target/release/bundle/
+
+# Desktop app — Electron (legacy, kept for production release until parity)
+npm start                  # Production Electron build + run (UNCHANGED)
+npm run start:electron     # Explicit alias
+npm run dev:electron       # Electron dev mode (was `dev` before promotion)
+npm run dev:debug          # Electron debug mode
+npm run dev:mcp            # Electron MCP server for AI debugging
 
 # Project data: .auto-claude/specs/ (gitignored)
 ```
@@ -730,16 +732,16 @@ while gracefully stubbing un-ported methods (logged as `[shim] stub: NAME`
 in DEV). Use `__tauriDebug.test('command_name', args)` from DevTools to
 exercise individual Rust commands.
 
-**With the Electron frontend**:
+**With the Electron frontend** (legacy — `npm run dev` is now Tauri):
 
 ```bash
-npm start        # Build and run desktop app
-npm run dev      # Run in development mode (includes --remote-debugging-port=9222 for E2E testing)
+npm start              # Build and run desktop Electron app (production)
+npm run dev:electron   # Electron dev mode (was `dev` before Tauri promotion)
 ```
 
-**For E2E Testing with QA Agents:**
+**For E2E Testing with QA Agents (Electron-only — Electron MCP):**
 
-1. Start the Electron app: `npm run dev`
+1. Start the Electron app: `npm run dev:electron`
 2. Enable Electron MCP in `apps/backend/.env`: `ELECTRON_MCP_ENABLED=true`
 3. Run QA: `python run.py --spec 001 --qa`
 4. QA agents will automatically interact with the running app for testing
