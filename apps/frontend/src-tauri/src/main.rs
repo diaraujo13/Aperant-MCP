@@ -9,7 +9,11 @@ mod types;
 
 use agent::manager::AgentManager;
 use api::agent::SharedAgentManager;
+use api::changelog::ChangelogProcess;
 use api::desktop::SharedDesktop;
+use api::ideation::{IdeationProcess, IdeationRunning};
+use api::insights::InsightsProcess;
+use api::roadmap::{RoadmapProcess, RoadmapRunning};
 use api::watcher::SharedWatchers;
 use state::DesktopState;
 use std::sync::Arc;
@@ -29,17 +33,41 @@ fn main() {
     let desktop_state: SharedDesktop = Arc::new(Mutex::new(DesktopState::default()));
     let terminals: api::terminal::Terminals =
         Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let terminal_titles: api::terminal::TerminalTitles =
+        Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let terminal_worktree_configs: api::terminal::TerminalWorktreeConfigs =
+        Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let terminal_display_orders: api::terminal::TerminalDisplayOrders =
+        Arc::new(Mutex::new(Vec::new()));
+    let terminal_sessions: api::terminal::TerminalSessions =
+        Arc::new(Mutex::new(Vec::new()));
     let agent_manager: SharedAgentManager = Arc::new(Mutex::new(AgentManager::default()));
     let watchers: SharedWatchers = Arc::new(Mutex::new(std::collections::HashMap::new()));
     // Clone before .manage() moves ownership — both setup task and Tauri state
     // manager share the same underlying map via Arc.
     let watchers_for_setup = Arc::clone(&watchers);
+    let roadmap_process: RoadmapProcess = Arc::new(std::sync::Mutex::new(None));
+    let roadmap_running: RoadmapRunning = Arc::new(std::sync::Mutex::new(false));
+    let ideation_process: IdeationProcess = Arc::new(std::sync::Mutex::new(None));
+    let ideation_running: IdeationRunning = Arc::new(std::sync::Mutex::new(false));
+    let insights_process: InsightsProcess = Arc::new(std::sync::Mutex::new(None));
+    let changelog_process: ChangelogProcess = Arc::new(std::sync::Mutex::new(None));
 
     tauri::Builder::default()
         .manage(desktop_state)
         .manage(terminals)
+        .manage(terminal_titles)
+        .manage(terminal_worktree_configs)
+        .manage(terminal_display_orders)
+        .manage(terminal_sessions)
         .manage(agent_manager)
         .manage(watchers)
+        .manage(roadmap_process)
+        .manage(roadmap_running)
+        .manage(ideation_process)
+        .manage(ideation_running)
+        .manage(insights_process)
+        .manage(changelog_process)
         .setup(move |app| {
             // Auto-start file watchers for every registered project so the
             // Kanban board refreshes automatically from the first load.
@@ -116,15 +144,30 @@ fn main() {
             api::task::task_resume_paused,
             api::task::task_load_image_thumbnail,
             api::task::task_refine_description,
+            // Inline code review (Phase X — per-line comments + AI triage)
+            api::review::task_review_file_patch,
+            api::review::task_review_comments_list,
+            api::review::task_review_comments_add,
+            api::review::task_review_comments_delete,
+            api::review::task_review_comments_update,
+            api::review::task_finalize_review_triage,
+            api::review::task_finalize_review_apply,
             api::task::task_get_logs,
             api::task::task_watch_logs,
             api::task::task_unwatch_logs,
+            api::task::activity_record,
             // Terminal subsystem (Phase 4 spike — PTY foundation)
             api::terminal::terminal_create,
             api::terminal::terminal_input,
             api::terminal::terminal_resize,
             api::terminal::terminal_destroy,
             api::terminal::terminal_check_alive,
+            // Terminal extended — title, sessions, display order
+            api::terminal::terminal_generate_name,
+            api::terminal::terminal_set_title,
+            api::terminal::terminal_set_worktree_config,
+            api::terminal::terminal_get_sessions,
+            api::terminal::terminal_update_display_orders,
             // Agent execution subsystem (Phase 5 — Rust → Python spawning)
             api::agent::agent_start,
             api::agent::agent_stop,
@@ -245,6 +288,48 @@ fn main() {
             api::github::github_pr_status_poll_stop,
             api::github::github_pr_memory_get,
             api::github::github_pr_memory_search,
+            // Roadmap domain
+            api::roadmap::roadmap_get,
+            api::roadmap::roadmap_get_status,
+            api::roadmap::roadmap_generate,
+            api::roadmap::roadmap_stop,
+            api::roadmap::roadmap_save,
+            api::roadmap::roadmap_update_feature_status,
+            api::roadmap::roadmap_convert_feature,
+            // Ideation domain
+            api::ideation::ideation_get,
+            api::ideation::ideation_generate,
+            api::ideation::ideation_stop,
+            api::ideation::ideation_update_status,
+            api::ideation::ideation_convert_to_task,
+            api::ideation::ideation_dismiss,
+            api::ideation::ideation_dismiss_all,
+            api::ideation::ideation_archive,
+            api::ideation::ideation_delete,
+            api::ideation::ideation_delete_multiple,
+            // Insights domain
+            api::insights::insights_list_sessions,
+            api::insights::insights_get_session,
+            api::insights::insights_new_session,
+            api::insights::insights_send_message,
+            api::insights::insights_clear_session,
+            api::insights::insights_create_task,
+            api::insights::insights_switch_session,
+            api::insights::insights_delete_session,
+            api::insights::insights_rename_session,
+            api::insights::insights_update_model_config,
+            // Changelog domain
+            api::changelog::changelog_get_done_tasks,
+            api::changelog::changelog_load_task_specs,
+            api::changelog::changelog_generate,
+            api::changelog::changelog_save,
+            api::changelog::changelog_read_existing,
+            api::changelog::changelog_suggest_version,
+            api::changelog::changelog_suggest_version_from_commits,
+            api::changelog::changelog_get_tags,
+            api::changelog::changelog_get_commits_preview,
+            api::changelog::changelog_save_image,
+            api::changelog::changelog_read_local_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

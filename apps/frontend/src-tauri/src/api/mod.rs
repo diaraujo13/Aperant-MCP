@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod changelog;
 pub mod claude_code;
 pub mod debug;
 pub mod desktop;
@@ -6,8 +7,12 @@ pub mod diagnostics;
 pub mod file;
 pub mod git;
 pub mod github;
+pub mod ideation;
+pub mod insights;
 pub mod profiles;
 pub mod project;
+pub mod review;
+pub mod roadmap;
 pub mod screenshot;
 pub mod settings;
 pub mod shell;

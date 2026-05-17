@@ -614,6 +614,20 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
   const taskExtAPI = {
     submitReview: (taskId: string, approved: boolean, feedback?: string, images?: unknown) =>
       safeInvoke<void>('task_submit_review', { taskId, approved, feedback, images }),
+    getReviewFilePatch: (taskId: string, file: string) =>
+      safeInvoke<unknown>('task_review_file_patch', { taskId, file }),
+    listReviewComments: (taskId: string) =>
+      safeInvoke<unknown>('task_review_comments_list', { taskId }),
+    addReviewComment: (taskId: string, input: unknown) =>
+      safeInvoke<unknown>('task_review_comments_add', { taskId, input }),
+    deleteReviewComment: (taskId: string, commentId: string) =>
+      safeInvoke<unknown>('task_review_comments_delete', { taskId, commentId }),
+    updateReviewComment: (taskId: string, commentId: string, patch: unknown) =>
+      safeInvoke<unknown>('task_review_comments_update', { taskId, commentId, patch }),
+    finalizeReviewTriage: (taskId: string) =>
+      safeInvoke<unknown>('task_finalize_review_triage', { taskId }),
+    finalizeReviewApply: (taskId: string, decisions: unknown) =>
+      safeInvoke<unknown>('task_finalize_review_apply', { taskId, decisions }),
     updateTaskStatus: (taskId: string, status: string, options?: unknown) =>
       safeInvoke<unknown>('task_update_status', { taskId, status, options }),
     recoverStuckTask: (taskId: string, options?: unknown) =>
@@ -644,12 +658,32 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       );
       return makeUnsubscribe(p);
     },
-    onTaskAutoRefresh: (_callback: unknown) => () => {},
-    onTaskAutoStart: (_callback: unknown) => () => {},
-    onTaskStatusChanged: (_callback: unknown) => () => {},
+    onTaskAutoRefresh: (callback: (data: { reason: string; projectId: string; specId: string }) => void) => {
+      const p = listen<{ projectId: string; specId: string }>('specs:changed', (e) =>
+        callback({ reason: 'specs:changed', projectId: e.payload.projectId, specId: e.payload.specId })
+      );
+      return makeUnsubscribe(p);
+    },
+    onTaskAutoStart: (callback: (projectId: string, taskId: string) => void) => {
+      const p = listen<{ projectId: string; specId: string }>('specs:changed', (e) =>
+        callback(e.payload.projectId, e.payload.specId)
+      );
+      return makeUnsubscribe(p);
+    },
+    onTaskStatusChanged: (callback: (data: { projectId: string; taskId: string; specId: string; oldStatus: unknown; newStatus: unknown }) => void) => {
+      const p = listen<{ taskId: string; state: string }>('agent:state', (e) =>
+        callback({ projectId: '', taskId: e.payload.taskId, specId: e.payload.taskId, oldStatus: null, newStatus: e.payload.state })
+      );
+      return makeUnsubscribe(p);
+    },
     onTaskRegressionDetected: (_callback: unknown) => () => {},
     onDebugEvent: (_callback: unknown) => () => {},
-    onTaskProgress: (_callback: unknown) => () => {},
+    onTaskProgress: (callback: (taskId: string, progress: unknown) => void) => {
+      const p = listen<{ taskId: string; stream: string; data: string }>('agent:output', (e) =>
+        callback(e.payload.taskId, e.payload.data)
+      );
+      return makeUnsubscribe(p);
+    },
     onTaskError: (callback: (taskId: string, error: string, projectId?: string) => void) => {
       const p = listen<{ taskId: string; stream: string; data: string }>(
         'agent:output',
@@ -684,10 +718,25 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       );
       return makeUnsubscribe(p);
     },
-    onTaskExecutionProgress: (_callback: unknown) => () => {},
+    onTaskExecutionProgress: (callback: (taskId: string, progress: unknown) => void) => {
+      const p = listen<{ taskId: string; stream: string; data: string }>('agent:output', (e) =>
+        callback(e.payload.taskId, { data: e.payload.data })
+      );
+      return makeUnsubscribe(p);
+    },
     onMergeProgress: (_callback: unknown) => () => {},
-    onTaskLogsChanged: (_callback: unknown) => () => {},
-    onTaskLogsStream: (_callback: unknown) => () => {},
+    onTaskLogsChanged: (callback: (specId: string, logs: unknown) => void) => {
+      const p = listen<{ taskId: string; stream: string; data: string }>('agent:output', (e) =>
+        callback(e.payload.taskId, { data: e.payload.data })
+      );
+      return makeUnsubscribe(p);
+    },
+    onTaskLogsStream: (callback: (specId: string, chunk: unknown) => void) => {
+      const p = listen<{ taskId: string; stream: string; data: string }>('agent:output', (e) =>
+        callback(e.payload.taskId, { stream: e.payload.stream, data: e.payload.data })
+      );
+      return makeUnsubscribe(p);
+    },
   };
 
   // Project extended operations
@@ -823,10 +872,12 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
   // Terminal extended stubs (session mgmt requires Python backend)
   const terminalExtAPI = {
     invokeClaudeInTerminal: (_id: string, _cwd?: string) => {},
-    generateTerminalName: () => Promise.resolve({ success: true, data: 'terminal' }),
-    setTerminalTitle: () => {},
-    setTerminalWorktreeConfig: () => {},
-    getTerminalSessions: () => Promise.resolve({ success: true, data: [] }),
+    generateTerminalName: () => safeInvoke('terminal_generate_name'),
+    setTerminalTitle: (id: string, title: string) =>
+      safeInvoke('terminal_set_title', { terminalId: id, title }),
+    setTerminalWorktreeConfig: (id: string, config: unknown) =>
+      safeInvoke('terminal_set_worktree_config', { terminalId: id, config }),
+    getTerminalSessions: () => safeInvoke('terminal_get_sessions'),
     restoreTerminalSession: () => Promise.resolve({ success: false, error: 'not_ported' }),
     clearTerminalSessions: () => Promise.resolve({ success: true }),
     resumeClaudeInTerminal: () => {},
@@ -837,13 +888,20 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     saveTerminalBuffer: () => Promise.resolve(undefined),
     checkTerminalPtyAlive: (terminalId: string) =>
       safeInvoke<boolean>('terminal_check_alive', { id: terminalId }),
-    updateTerminalDisplayOrders: () => Promise.resolve({ success: true }),
+    updateTerminalDisplayOrders: (orders: unknown) =>
+      safeInvoke('terminal_update_display_orders', { orders }),
     createTerminalWorktree: () => Promise.resolve({ success: false, error: 'not_ported' }),
     listTerminalWorktrees: () => Promise.resolve({ success: true, data: [] }),
     removeTerminalWorktree: () => Promise.resolve({ success: false, error: 'not_ported' }),
     listOtherWorktrees: () => Promise.resolve({ success: true, data: [] }),
-    onTerminalTitleChange: (_cb: unknown) => () => {},
-    onTerminalWorktreeConfigChange: (_cb: unknown) => () => {},
+    onTerminalTitleChange: (cb: (payload: unknown) => void) => {
+      const u = listen('terminal:title:change', (e: { payload: unknown }) => cb(e.payload));
+      return makeUnsubscribe(u);
+    },
+    onTerminalWorktreeConfigChange: (cb: (payload: unknown) => void) => {
+      const u = listen('terminal:worktree:config:change', (e: { payload: unknown }) => cb(e.payload));
+      return makeUnsubscribe(u);
+    },
     onTerminalClaudeSession: (_cb: unknown) => () => {},
     onTerminalRateLimit: (_cb: unknown) => () => {},
     onTerminalOAuthToken: (_cb: unknown) => () => {},
@@ -955,72 +1013,72 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     getLinearIssues: () => Promise.resolve({ success: false, error: 'linear_not_ported' }),
     importLinearIssues: () => Promise.resolve({ success: false, error: 'linear_not_ported' }),
     checkLinearConnection: () => Promise.resolve({ success: false, error: 'linear_not_ported' }),
-    // Roadmap — not ported
-    getRoadmap: () => Promise.resolve({ success: true, data: null }),
-    getRoadmapStatus: () => Promise.resolve({ success: true, data: { isRunning: false } }),
-    saveRoadmap: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    generateRoadmap: () => {},
-    refreshRoadmap: () => {},
-    stopRoadmap: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    updateFeatureStatus: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    convertFeatureToSpec: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    saveRoadmapProgress: () => Promise.resolve({ success: true }),
+    // Roadmap — ported to Rust
+    getRoadmap: (projectPath: string) => safeInvoke('roadmap_get', { projectPath }),
+    getRoadmapStatus: () => safeInvoke('roadmap_get_status'),
+    saveRoadmap: (projectPath: string, data: unknown) => safeInvoke('roadmap_save', { projectPath, data }),
+    generateRoadmap: (projectPath: string, params?: unknown) => safeInvoke('roadmap_generate', { projectPath, params }),
+    refreshRoadmap: (projectPath: string, params?: unknown) => safeInvoke('roadmap_generate', { projectPath, params: { ...(params as Record<string, unknown> ?? {}), refresh: true } }),
+    stopRoadmap: () => safeInvoke('roadmap_stop'),
+    updateFeatureStatus: (projectPath: string, featureId: string, status: string) => safeInvoke('roadmap_update_feature_status', { projectPath, featureId, status }),
+    convertFeatureToSpec: (projectPath: string, featureId: string) => safeInvoke('roadmap_convert_feature', { projectPath, featureId }),
+    saveRoadmapProgress: (_data: unknown) => Promise.resolve({ success: true }),
     loadRoadmapProgress: () => Promise.resolve({ success: true, data: null }),
     clearRoadmapProgress: () => Promise.resolve({ success: true }),
-    onRoadmapProgress: (_cb: unknown) => () => {},
-    onRoadmapComplete: (_cb: unknown) => () => {},
-    onRoadmapError: (_cb: unknown) => () => {},
-    onRoadmapStopped: (_cb: unknown) => () => {},
-    // Ideation — not ported
-    getIdeation: () => Promise.resolve({ success: true, data: null }),
-    generateIdeation: () => {},
-    refreshIdeation: () => {},
-    stopIdeation: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    updateIdeaStatus: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    convertIdeaToTask: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    dismissIdea: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    dismissAllIdeas: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    archiveIdea: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    deleteIdea: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    deleteMultipleIdeas: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    onIdeationProgress: (_cb: unknown) => () => {},
-    onIdeationLog: (_cb: unknown) => () => {},
-    onIdeationComplete: (_cb: unknown) => () => {},
-    onIdeationError: (_cb: unknown) => () => {},
-    onIdeationStopped: (_cb: unknown) => () => {},
-    onIdeationTypeComplete: (_cb: unknown) => () => {},
-    onIdeationTypeFailed: (_cb: unknown) => () => {},
-    // Insights — not ported
-    getInsightsSession: () => Promise.resolve({ success: true, data: null }),
-    sendInsightsMessage: () => {},
-    clearInsightsSession: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    createTaskFromInsights: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    listInsightsSessions: () => Promise.resolve({ success: true, data: [] }),
-    newInsightsSession: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    switchInsightsSession: () => Promise.resolve({ success: true, data: null }),
-    deleteInsightsSession: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    renameInsightsSession: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    updateInsightsModelConfig: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    onInsightsStreamChunk: (_cb: unknown) => () => {},
-    onInsightsStatus: (_cb: unknown) => () => {},
-    onInsightsError: (_cb: unknown) => () => {},
-    onInsightsSessionUpdated: (_cb: unknown) => () => {},
-    // Changelog — partially ported (git ops work, generation requires Python)
-    getChangelogDoneTasks: () => Promise.resolve({ success: true, data: [] }),
-    loadTaskSpecs: () => Promise.resolve({ success: true, data: [] }),
-    generateChangelog: () => {},
-    saveChangelog: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    readExistingChangelog: () => Promise.resolve({ success: true, data: null }),
-    suggestChangelogVersion: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    suggestChangelogVersionFromCommits: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    getChangelogBranches: (projectId: string) => gitAPI.getGitBranchesWithInfo(projectId),
-    getChangelogTags: () => Promise.resolve({ success: true, data: [] }),
-    getChangelogCommitsPreview: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    saveChangelogImage: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    readLocalImage: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    onChangelogGenerationProgress: (_cb: unknown) => () => {},
-    onChangelogGenerationComplete: (_cb: unknown) => () => {},
-    onChangelogGenerationError: (_cb: unknown) => () => {},
+    onRoadmapProgress: (cb: (p: unknown) => void) => { const u = listen('roadmap:progress', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onRoadmapComplete: (cb: (p: unknown) => void) => { const u = listen('roadmap:complete', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onRoadmapError: (cb: (p: unknown) => void) => { const u = listen('roadmap:error', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onRoadmapStopped: (cb: (p: unknown) => void) => { const u = listen('roadmap:stopped', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    // Ideation — ported to Rust
+    getIdeation: (projectPath: string) => safeInvoke('ideation_get', { projectPath }),
+    generateIdeation: (projectPath: string, params?: unknown) => safeInvoke('ideation_generate', { projectPath, params }),
+    refreshIdeation: (projectPath: string, params?: unknown) => safeInvoke('ideation_generate', { projectPath, params: { ...(params as Record<string, unknown> ?? {}), refresh: true } }),
+    stopIdeation: () => safeInvoke('ideation_stop'),
+    updateIdeaStatus: (projectPath: string, ideaId: string, status: string) => safeInvoke('ideation_update_status', { projectPath, ideaId, status }),
+    convertIdeaToTask: (projectPath: string, ideaId: string) => safeInvoke('ideation_convert_to_task', { projectPath, ideaId }),
+    dismissIdea: (projectPath: string, ideaId: string) => safeInvoke('ideation_dismiss', { projectPath, ideaId }),
+    dismissAllIdeas: (projectPath: string) => safeInvoke('ideation_dismiss_all', { projectPath }),
+    archiveIdea: (projectPath: string, ideaId: string) => safeInvoke('ideation_archive', { projectPath, ideaId }),
+    deleteIdea: (projectPath: string, ideaId: string) => safeInvoke('ideation_delete', { projectPath, ideaId }),
+    deleteMultipleIdeas: (projectPath: string, ideaIds: string[]) => safeInvoke('ideation_delete_multiple', { projectPath, ideaIds }),
+    onIdeationProgress: (cb: (p: unknown) => void) => { const u = listen('ideation:progress', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onIdeationLog: (cb: (p: unknown) => void) => { const u = listen('ideation:log', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onIdeationComplete: (cb: (p: unknown) => void) => { const u = listen('ideation:complete', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onIdeationError: (cb: (p: unknown) => void) => { const u = listen('ideation:error', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onIdeationStopped: (cb: (p: unknown) => void) => { const u = listen('ideation:stopped', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onIdeationTypeComplete: (cb: (p: unknown) => void) => { const u = listen('ideation:type_complete', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onIdeationTypeFailed: (cb: (p: unknown) => void) => { const u = listen('ideation:type_failed', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    // Insights — ported to Rust
+    getInsightsSession: (projectPath: string, sessionId?: string) => safeInvoke('insights_get_session', { projectPath, sessionId: sessionId ?? null }),
+    sendInsightsMessage: (projectPath: string, sessionId: string, message: string, modelConfig?: unknown) => safeInvoke('insights_send_message', { projectPath, sessionId, message, modelConfig: modelConfig ?? null }),
+    clearInsightsSession: (projectPath: string, sessionId: string) => safeInvoke('insights_clear_session', { projectPath, sessionId }),
+    createTaskFromInsights: (projectPath: string, sessionId: string, description: string) => safeInvoke('insights_create_task', { projectPath, sessionId, description }),
+    listInsightsSessions: (projectPath: string) => safeInvoke('insights_list_sessions', { projectPath }),
+    newInsightsSession: (projectPath: string) => safeInvoke('insights_new_session', { projectPath }),
+    switchInsightsSession: (projectPath: string, sessionId: string) => safeInvoke('insights_switch_session', { projectPath, sessionId }),
+    deleteInsightsSession: (projectPath: string, sessionId: string) => safeInvoke('insights_delete_session', { projectPath, sessionId }),
+    renameInsightsSession: (projectPath: string, sessionId: string, name: string) => safeInvoke('insights_rename_session', { projectPath, sessionId, name }),
+    updateInsightsModelConfig: (projectPath: string, sessionId: string, config: unknown) => safeInvoke('insights_update_model_config', { projectPath, sessionId, config }),
+    onInsightsStreamChunk: (cb: (p: unknown) => void) => { const u = listen('insights:stream:chunk', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onInsightsStatus: (cb: (p: unknown) => void) => { const u = listen('insights:status', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onInsightsError: (cb: (p: unknown) => void) => { const u = listen('insights:error', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onInsightsSessionUpdated: (cb: (p: unknown) => void) => { const u = listen('insights:session:updated', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    // Changelog — ported to Rust
+    getChangelogDoneTasks: (projectPath: string) => safeInvoke('changelog_get_done_tasks', { projectPath }),
+    loadTaskSpecs: (projectPath: string, specIds: string[]) => safeInvoke('changelog_load_task_specs', { projectPath, specIds }),
+    generateChangelog: (projectPath: string, params?: unknown) => safeInvoke('changelog_generate', { projectPath, params }),
+    saveChangelog: (projectPath: string, content: string, filename?: string) => safeInvoke('changelog_save', { projectPath, content, filename: filename ?? null }),
+    readExistingChangelog: (projectPath: string) => safeInvoke('changelog_read_existing', { projectPath }),
+    suggestChangelogVersion: (projectPath: string) => safeInvoke('changelog_suggest_version', { projectPath }),
+    suggestChangelogVersionFromCommits: (projectPath: string, fromTag: string, toRef: string) => safeInvoke('changelog_suggest_version_from_commits', { projectPath, fromTag, toRef }),
+    getChangelogBranches: (projectPath: string) => gitAPI.getGitBranchesWithInfo(projectPath),
+    getChangelogTags: (projectPath: string) => safeInvoke('changelog_get_tags', { projectPath }),
+    getChangelogCommitsPreview: (projectPath: string, from: string, to: string) => safeInvoke('changelog_get_commits_preview', { projectPath, from, to }),
+    saveChangelogImage: (projectPath: string, filename: string, dataUrl: string) => safeInvoke('changelog_save_image', { projectPath, filename, dataUrl }),
+    readLocalImage: (path: string) => safeInvoke('changelog_read_local_image', { path }),
+    onChangelogGenerationProgress: (cb: (p: unknown) => void) => { const u = listen('changelog:progress', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onChangelogGenerationComplete: (cb: (p: unknown) => void) => { const u = listen('changelog:complete', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
+    onChangelogGenerationError: (cb: (p: unknown) => void) => { const u = listen('changelog:error', (e: { payload: unknown }) => cb(e.payload)); return makeUnsubscribe(u); },
     // Releases — not ported
     getReleaseableVersions: () => Promise.resolve({ success: true, data: [] }),
     runReleasePreflightCheck: () => Promise.resolve({ success: false, error: 'not_ported' }),
@@ -1087,7 +1145,7 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       onQueueBlockedNoProfiles: (_cb: unknown) => () => {},
     },
     recordActivity: (source: string) => {
-      void invoke('activity_record', { source }).catch(() => {});
+      void invoke('activity_record', { entry: { source, timestamp: new Date().toISOString() } }).catch(() => {});
     },
   };
 
@@ -1137,5 +1195,3 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     '[electron-shim] Tauri shim mounted (desktop domain real, rest stubbed). __tauriDebug exposed.'
   );
 }
-
-export {};
