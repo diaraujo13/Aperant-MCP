@@ -222,6 +222,18 @@ fn main() {
             api::profiles::api_profile_set_active,
             api::profiles::api_profile_test_connection,
             api::profiles::api_profile_discover_models,
+            // Provider accounts + usage monitoring (Unit 6)
+            api::profiles::provider_account_save,
+            api::profiles::provider_account_update,
+            api::profiles::provider_account_delete,
+            api::profiles::provider_account_set_order,
+            api::profiles::usage_request_update,
+            api::profiles::usage_request_all,
+            api::profiles::usage_fetch_claude,
+            api::profiles::profile_get_best_available,
+            api::profiles::profile_get_priority_order,
+            api::profiles::profile_set_priority_order,
+            api::profiles::profile_retry_with,
             // Specs file watcher (Phase 6b — Kanban auto-refresh)
             api::watcher::task_watch_project,
             api::watcher::task_unwatch_project,

@@ -1269,6 +1269,12 @@ pub async fn github_pr_review(
                                 "stream": stream,
                                 "data": line,
                             }));
+                            // Notify renderer that new log lines are available.
+                            let _ = app_c.emit("github:pr:logs:updated", serde_json::json!({
+                                "projectId": pid_str,
+                                "prNumber": pr_number,
+                                "entryCount": 1,
+                            }));
 
                             // Parse progress pattern [  n%] message
                             if let Some((pct, msg)) = parse_progress_line(&line) {

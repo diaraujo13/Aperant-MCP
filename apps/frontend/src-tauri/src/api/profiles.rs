@@ -555,3 +555,297 @@ pub async fn api_profile_discover_models(
 
     Ok(IpcResult::ok(json!({ "models": models })))
 }
+
+// ── Provider accounts ─────────────────────────────────────────────────────────
+
+fn user_data_dir() -> Option<std::path::PathBuf> {
+    dirs::config_dir().map(|d| d.join(APP_NAME))
+}
+
+fn provider_accounts_path() -> Option<std::path::PathBuf> {
+    user_data_dir().map(|d| d.join("provider-accounts.json"))
+}
+
+fn read_provider_accounts() -> Value {
+    let path = match provider_accounts_path() {
+        Some(p) => p,
+        None => return json!([]),
+    };
+    if !path.exists() {
+        return json!([]);
+    }
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    serde_json::from_str(&raw).unwrap_or_else(|_| json!([]))
+}
+
+fn write_provider_accounts(accounts: &Value) -> Result<(), String> {
+    let path = provider_accounts_path().ok_or_else(|| "no_data_dir".to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(accounts).map_err(|e| e.to_string())?;
+    std::fs::write(&path, raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn provider_account_save(account: Value) -> AppResult<IpcResult<Value>> {
+    let mut accounts = read_provider_accounts();
+    let arr = accounts
+        .as_array_mut()
+        .ok_or_else(|| AppError::new("invalid_state", "accounts not array"))?;
+    let id = Uuid::new_v4().to_string();
+    let mut entry = account;
+    entry["id"] = json!(id);
+    arr.push(entry.clone());
+    write_provider_accounts(&json!(arr)).map_err(|e| AppError::new("write_failed", e))?;
+    Ok(IpcResult::ok(entry))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn provider_account_update(id: String, account: Value) -> AppResult<IpcResult<Value>> {
+    let mut accounts = read_provider_accounts();
+    let arr = accounts
+        .as_array_mut()
+        .ok_or_else(|| AppError::new("invalid_state", "accounts not array"))?;
+    let pos = arr
+        .iter()
+        .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(&id))
+        .ok_or_else(|| AppError::new("not_found", format!("account {id} not found")))?;
+    let mut updated = account;
+    updated["id"] = json!(id);
+    arr[pos] = updated.clone();
+    write_provider_accounts(&json!(arr)).map_err(|e| AppError::new("write_failed", e))?;
+    Ok(IpcResult::ok(updated))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn provider_account_delete(id: String) -> AppResult<IpcResult<()>> {
+    let mut accounts = read_provider_accounts();
+    let arr = accounts
+        .as_array_mut()
+        .ok_or_else(|| AppError::new("invalid_state", "accounts not array"))?;
+    arr.retain(|a| a.get("id").and_then(|v| v.as_str()) != Some(&id));
+    write_provider_accounts(&json!(arr)).map_err(|e| AppError::new("write_failed", e))?;
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn provider_account_set_order(ids: Vec<String>) -> AppResult<IpcResult<()>> {
+    let accounts = read_provider_accounts();
+    let arr = accounts
+        .as_array()
+        .ok_or_else(|| AppError::new("invalid_state", "accounts not array"))?;
+    let mut reordered: Vec<Value> = Vec::new();
+    for id in &ids {
+        if let Some(a) = arr
+            .iter()
+            .find(|a| a.get("id").and_then(|v| v.as_str()) == Some(id.as_str()))
+        {
+            reordered.push(a.clone());
+        }
+    }
+    for a in arr {
+        let aid = a.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if !ids.iter().any(|id| id == aid) {
+            reordered.push(a.clone());
+        }
+    }
+    write_provider_accounts(&json!(reordered)).map_err(|e| AppError::new("write_failed", e))?;
+    Ok(IpcResult::ok(()))
+}
+
+// ── Usage cache ───────────────────────────────────────────────────────────────
+
+fn usage_cache_path() -> Option<std::path::PathBuf> {
+    user_data_dir().map(|d| d.join("usage-cache.json"))
+}
+
+fn read_usage_cache() -> Value {
+    let path = match usage_cache_path() {
+        Some(p) => p,
+        None => return json!({}),
+    };
+    if !path.exists() {
+        return json!({});
+    }
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
+}
+
+fn write_usage_cache(cache: &Value) -> Result<(), String> {
+    let path = usage_cache_path().ok_or_else(|| "no_data_dir".to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(cache).map_err(|e| e.to_string())?;
+    std::fs::write(&path, raw).map_err(|e| e.to_string())
+}
+
+// ── Profile priority ──────────────────────────────────────────────────────────
+
+fn profile_priority_path() -> Option<std::path::PathBuf> {
+    user_data_dir().map(|d| d.join("profile-priority.json"))
+}
+
+fn read_profile_priority() -> Vec<String> {
+    let path = match profile_priority_path() {
+        Some(p) => p,
+        None => return vec![],
+    };
+    if !path.exists() {
+        return vec![];
+    }
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default()
+}
+
+fn write_profile_priority(order: &[String]) -> Result<(), String> {
+    let path = profile_priority_path().ok_or_else(|| "no_data_dir".to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(order).map_err(|e| e.to_string())?;
+    std::fs::write(&path, raw).map_err(|e| e.to_string())
+}
+
+// ── Usage monitoring commands ─────────────────────────────────────────────────
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn usage_request_update(
+    app: tauri::AppHandle,
+    profile_id: String,
+) -> AppResult<IpcResult<()>> {
+    use tauri::Emitter;
+    let cache = read_usage_cache();
+    let entry = cache.get(&profile_id).cloned().unwrap_or(json!(null));
+    let _ = app.emit(
+        "profile:usage:updated",
+        json!({ "profileId": profile_id, "usage": entry }),
+    );
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn usage_request_all(app: tauri::AppHandle) -> AppResult<IpcResult<()>> {
+    use tauri::Emitter;
+    let cache = read_usage_cache();
+    let _ = app.emit("profile:all_usage_updated", &cache);
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn usage_fetch_claude(
+    app: tauri::AppHandle,
+    profile_id: String,
+) -> AppResult<IpcResult<Value>> {
+    use tauri::Emitter;
+    let api_key = settings::settings_path()
+        .ok()
+        .map(|p| settings::read_settings_at(&p))
+        .and_then(|s| {
+            s.get("claudeProfiles")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    arr.iter()
+                        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&profile_id))
+                        .and_then(|p| p.get("apiKey"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                })
+        })
+        .unwrap_or_default();
+
+    if api_key.is_empty() {
+        return Ok(IpcResult::ok(json!(null)));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| AppError::new("http_client_failed", e.to_string()))?;
+
+    let res = client
+        .get("https://api.anthropic.com/v1/usage")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .send()
+        .await
+        .map_err(|e| AppError::new("request_failed", e.to_string()))?;
+
+    let usage: Value = res.json().await.unwrap_or(json!(null));
+
+    let mut cache = read_usage_cache();
+    if let Some(obj) = cache.as_object_mut() {
+        obj.insert(profile_id.clone(), usage.clone());
+    }
+    let _ = write_usage_cache(&cache);
+    let _ = app.emit(
+        "profile:usage:updated",
+        json!({ "profileId": profile_id, "usage": usage }),
+    );
+
+    Ok(IpcResult::ok(usage))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn profile_get_best_available() -> AppResult<IpcResult<Value>> {
+    let cache = read_usage_cache();
+    let priority = read_profile_priority();
+    let profiles: Vec<Value> = settings::settings_path()
+        .ok()
+        .map(|p| settings::read_settings_at(&p))
+        .and_then(|s| {
+            s.get("claudeProfiles")
+                .and_then(|v| v.as_array())
+                .cloned()
+        })
+        .unwrap_or_default();
+
+    for id in &priority {
+        if let Some(p) = profiles
+            .iter()
+            .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(id.as_str()))
+        {
+            let rate_limited = cache
+                .get(id)
+                .and_then(|u| u.get("rateLimited"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if !rate_limited {
+                return Ok(IpcResult::ok(p.clone()));
+            }
+        }
+    }
+
+    let best = profiles
+        .into_iter()
+        .find(|p| p.get("active").and_then(|v| v.as_bool()).unwrap_or(false))
+        .unwrap_or(json!(null));
+
+    Ok(IpcResult::ok(best))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn profile_get_priority_order() -> AppResult<IpcResult<Vec<String>>> {
+    Ok(IpcResult::ok(read_profile_priority()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn profile_set_priority_order(order: Vec<String>) -> AppResult<IpcResult<()>> {
+    write_profile_priority(&order).map_err(|e| AppError::new("write_failed", e))?;
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn profile_retry_with(
+    app: tauri::AppHandle,
+    profile_id: String,
+    payload: Value,
+) -> AppResult<IpcResult<()>> {
+    use tauri::Emitter;
+    let _ = app.emit(
+        "profile:proactive_swap",
+        json!({ "profileId": profile_id, "payload": payload }),
+    );
+    Ok(IpcResult::ok(()))
+}

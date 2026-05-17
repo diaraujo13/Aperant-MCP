@@ -522,17 +522,70 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       );
       return makeUnsubscribe(p);
     },
-    onPRLogsUpdated: (_cb: unknown) => noopUnsub,
-    onPRStatusUpdate: (_cb: unknown) => noopUnsub,
-    onAutoFixProgress: (_cb: unknown) => noopUnsub,
-    onAutoFixComplete: (_cb: unknown) => noopUnsub,
-    onAutoFixError: (_cb: unknown) => noopUnsub,
-    onBatchProgress: (_cb: unknown) => noopUnsub,
-    onBatchComplete: (_cb: unknown) => noopUnsub,
-    onBatchError: (_cb: unknown) => noopUnsub,
-    onAnalyzePreviewProgress: (_cb: unknown) => noopUnsub,
-    onAnalyzePreviewComplete: (_cb: unknown) => noopUnsub,
-    onAnalyzePreviewError: (_cb: unknown) => noopUnsub,
+    onPRLogsUpdated: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:pr:logs:updated', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onPRStatusUpdate: (callback: (update: unknown) => void) => {
+      const p = listen<unknown>('github:pr:status:update', (e) => callback(e.payload));
+      return makeUnsubscribe(p);
+    },
+    onAutoFixProgress: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:autofix:progress', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onAutoFixComplete: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:autofix:complete', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onAutoFixError: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:autofix:error', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onBatchProgress: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:batch:progress', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onBatchComplete: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:batch:complete', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onBatchError: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:batch:error', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onAnalyzePreviewProgress: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:analyze:preview:progress', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onAnalyzePreviewComplete: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:analyze:preview:complete', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
+    onAnalyzePreviewError: (callback: (projectId: string, data: unknown) => void) => {
+      const p = listen<{ projectId: string }>('github:analyze:preview:error', (e) =>
+        callback(e.payload.projectId, e.payload)
+      );
+      return makeUnsubscribe(p);
+    },
   };
 
   // Top-level GitHub auth methods (renderer calls window.electronAPI.checkGitHubCli(),
@@ -805,24 +858,44 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<unknown>('claude_auto_switch_get'),
     updateAutoSwitchSettings: (settings: unknown) =>
       safeInvoke<void>('claude_auto_switch_update', { settings }),
-    // Usage monitoring stubs (not ported)
-    requestUsageUpdate: () => Promise.resolve({ success: false, data: null }),
-    requestAllProfilesUsage: () => Promise.resolve({ success: false, data: null }),
-    onUsageUpdated: (_cb: unknown) => () => {},
-    onProactiveSwapNotification: (_cb: unknown) => () => {},
-    onAllProfilesUsageUpdated: (_cb: unknown) => () => {},
-    onSDKRateLimit: (_cb: unknown) => () => {},
-    onAuthFailure: (_cb: unknown) => () => {},
-    retryWithProfile: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    fetchClaudeUsage: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    getBestAvailableProfile: () => Promise.resolve({ success: true, data: null }),
-    getAccountPriorityOrder: () => Promise.resolve({ success: true, data: [] }),
-    setAccountPriorityOrder: () => Promise.resolve({ success: true }),
+    // Usage monitoring
+    requestUsageUpdate: (profileId: string) =>
+      safeInvoke<void>('usage_request_update', { profileId }),
+    requestAllProfilesUsage: () =>
+      safeInvoke<void>('usage_request_all'),
+    onUsageUpdated: (callback: (data: unknown) => void) => {
+      const p = listen<unknown>('profile:usage:updated', (event) => callback(event.payload));
+      return makeUnsubscribe(p);
+    },
+    onProactiveSwapNotification: (callback: (data: unknown) => void) => {
+      const p = listen<unknown>('profile:proactive_swap', (event) => callback(event.payload));
+      return makeUnsubscribe(p);
+    },
+    onAllProfilesUsageUpdated: (callback: (data: unknown) => void) => {
+      const p = listen<unknown>('profile:all_usage_updated', (event) => callback(event.payload));
+      return makeUnsubscribe(p);
+    },
+    onSDKRateLimit: (_callback: unknown) => () => {},
+    onAuthFailure: (_callback: unknown) => () => {},
+    retryWithProfile: (profileId: string, payload: unknown) =>
+      safeInvoke<void>('profile_retry_with', { profileId, payload }),
+    fetchClaudeUsage: (profileId: string) =>
+      safeInvoke<unknown>('usage_fetch_claude', { profileId }),
+    getBestAvailableProfile: () =>
+      safeInvoke<unknown>('profile_get_best_available'),
+    getAccountPriorityOrder: () =>
+      safeInvoke<string[]>('profile_get_priority_order'),
+    setAccountPriorityOrder: (order: string[]) =>
+      safeInvoke<void>('profile_set_priority_order', { order }),
     // Provider accounts
-    saveProviderAccount: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    updateProviderAccount: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    deleteProviderAccount: () => Promise.resolve({ success: false, error: 'not_ported' }),
-    setProviderAccountOrder: () => Promise.resolve({ success: false, error: 'not_ported' }),
+    saveProviderAccount: (account: unknown) =>
+      safeInvoke<unknown>('provider_account_save', { account }),
+    updateProviderAccount: (id: string, account: unknown) =>
+      safeInvoke<unknown>('provider_account_update', { id, account }),
+    deleteProviderAccount: (id: string) =>
+      safeInvoke<void>('provider_account_delete', { id }),
+    setProviderAccountOrder: (ids: string[]) =>
+      safeInvoke<void>('provider_account_set_order', { ids }),
     codexAuthLogin: () => Promise.resolve({ success: false, error: 'not_ported' }),
     codexAuthStatus: () => Promise.resolve({ success: false, error: 'not_ported' }),
     codexAuthLogout: () => Promise.resolve({ success: false, error: 'not_ported' }),
