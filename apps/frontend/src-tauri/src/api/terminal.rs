@@ -43,6 +43,19 @@ pub(crate) struct Terminal {
 }
 
 pub type Terminals = Arc<Mutex<HashMap<String, Terminal>>>;
+pub type TerminalTitles = Arc<Mutex<HashMap<String, String>>>;
+pub type TerminalWorktreeConfigs = Arc<Mutex<HashMap<String, serde_json::Value>>>;
+pub type TerminalDisplayOrders = Arc<Mutex<Vec<String>>>;
+pub type TerminalSessions = Arc<Mutex<Vec<serde_json::Value>>>;
+
+const ADJECTIVES: &[&str] = &[
+    "swift", "bold", "calm", "deep", "fair", "glad", "keen", "mild", "neat", "pure",
+    "rich", "sage", "tall", "warm", "wild", "cool", "dark", "free", "jade", "nova",
+];
+const NOUNS: &[&str] = &[
+    "pine", "river", "stone", "cliff", "grove", "ridge", "creek", "bloom", "frost",
+    "glade", "haven", "isle", "lake", "mist", "peak", "reef", "shore", "vale", "wind", "dawn",
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,6 +101,7 @@ pub async fn terminal_create(
     options: TerminalCreateOptions,
     app_handle: AppHandle,
     terminals: State<'_, Terminals>,
+    sessions: State<'_, TerminalSessions>,
 ) -> AppResult<IpcResult<CreateResult>> {
     let id = options.id.clone();
 
@@ -188,6 +202,15 @@ pub async fn terminal_create(
         map.insert(id.clone(), terminal);
     }
 
+    {
+        let created_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let mut list = sessions.lock().await;
+        list.push(serde_json::json!({ "id": id, "title": null, "createdAt": created_at }));
+    }
+
     info!(id = %id, shell = %shell, "terminal spawned");
     Ok(IpcResult::ok(CreateResult { id }))
 }
@@ -247,6 +270,7 @@ pub async fn terminal_resize(
 pub async fn terminal_destroy(
     id: String,
     terminals: State<'_, Terminals>,
+    sessions: State<'_, TerminalSessions>,
 ) -> AppResult<IpcResult<()>> {
     let mut map = terminals.lock().await;
     let mut term = map
@@ -262,6 +286,11 @@ pub async fn terminal_destroy(
     term.reader_task.abort();
     drop(term.master);
 
+    {
+        let mut list = sessions.lock().await;
+        list.retain(|s| s.get("id").and_then(serde_json::Value::as_str) != Some(&id));
+    }
+
     info!(id = %id, "terminal destroyed");
     Ok(IpcResult::ok(()))
 }
@@ -275,6 +304,65 @@ pub async fn terminal_check_alive(
 ) -> AppResult<IpcResult<bool>> {
     let map = terminals.lock().await;
     Ok(IpcResult::ok(map.contains_key(&id)))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn terminal_generate_name() -> AppResult<IpcResult<String>> {
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(42);
+    let adj = ADJECTIVES[seed % ADJECTIVES.len()];
+    let noun = NOUNS[(seed / ADJECTIVES.len()) % NOUNS.len()];
+    Ok(IpcResult::ok(format!("{adj}-{noun}")))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn terminal_set_title(
+    app: AppHandle,
+    terminal_id: String,
+    title: String,
+    titles: State<'_, TerminalTitles>,
+) -> AppResult<IpcResult<()>> {
+    {
+        let mut map = titles.lock().await;
+        map.insert(terminal_id.clone(), title.clone());
+    }
+    let _ = app.emit("terminal:title:change", serde_json::json!({ "terminalId": terminal_id, "title": title }));
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn terminal_set_worktree_config(
+    app: AppHandle,
+    terminal_id: String,
+    config: serde_json::Value,
+    worktree_configs: State<'_, TerminalWorktreeConfigs>,
+) -> AppResult<IpcResult<()>> {
+    {
+        let mut map = worktree_configs.lock().await;
+        map.insert(terminal_id.clone(), config.clone());
+    }
+    let _ = app.emit("terminal:worktree:config:change", serde_json::json!({ "terminalId": terminal_id, "config": config }));
+    Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn terminal_get_sessions(
+    sessions: State<'_, TerminalSessions>,
+) -> AppResult<IpcResult<serde_json::Value>> {
+    let list = sessions.lock().await;
+    Ok(IpcResult::ok(serde_json::json!(*list)))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn terminal_update_display_orders(
+    orders: Vec<String>,
+    display_orders: State<'_, TerminalDisplayOrders>,
+) -> AppResult<IpcResult<()>> {
+    let mut list = display_orders.lock().await;
+    *list = orders;
+    Ok(IpcResult::ok(()))
 }
 
 #[cfg(test)]

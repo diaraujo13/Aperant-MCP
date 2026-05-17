@@ -1,8 +1,12 @@
 import { execFile, spawnSync } from 'child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { win32 } from 'path';
 import { isWindows } from '../index';
+
+// Always use win32.join so path separators are correct even when running
+// unit tests on macOS/Linux — this file is Windows-only at runtime anyway.
+const join = win32.join;
 
 export type WindowsPowerShellMode = 'encoded' | 'file';
 

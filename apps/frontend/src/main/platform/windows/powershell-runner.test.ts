@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from 'fs';
-import { join } from 'path';
+import { join, win32 } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../index', () => ({
@@ -86,9 +86,9 @@ describe('powershell-runner', () => {
 
     const [, args, options] = vi.mocked(spawnSync).mock.calls[0];
     expect(args).toContain('-EncodedCommand');
-    expect(options?.env?.TEMP).toBe(join(tempRoot, 'Temp'));
-    expect(options?.env?.TMP).toBe(join(tempRoot, 'Temp'));
-    expect(options?.env?.TMPDIR).toBe(join(tempRoot, 'Temp'));
+    expect(options?.env?.TEMP).toBe(win32.join(tempRoot, 'Temp'));
+    expect(options?.env?.TMP).toBe(win32.join(tempRoot, 'Temp'));
+    expect(options?.env?.TMPDIR).toBe(win32.join(tempRoot, 'Temp'));
   });
 
   it('uses file mode with a safe temp script path', () => {
@@ -110,7 +110,7 @@ describe('powershell-runner', () => {
     const scriptPath = args[fileFlagIndex + 1];
 
     expect(fileFlagIndex).toBeGreaterThanOrEqual(0);
-    expect(scriptPath.startsWith(join(tempRoot, 'Temp'))).toBe(true);
+    expect(scriptPath.startsWith(win32.join(tempRoot, 'Temp'))).toBe(true);
     expect(existsSync(scriptPath)).toBe(false);
   });
 
@@ -127,7 +127,7 @@ describe('powershell-runner', () => {
 
     const [, args, options] = vi.mocked(execFile).mock.calls[0];
     expect(args).toContain('-File');
-    expect(options?.env?.TEMP).toBe(join(tempRoot, 'Temp'));
-    expect(options?.env?.TMP).toBe(join(tempRoot, 'Temp'));
+    expect(options?.env?.TEMP).toBe(win32.join(tempRoot, 'Temp'));
+    expect(options?.env?.TMP).toBe(win32.join(tempRoot, 'Temp'));
   });
 });

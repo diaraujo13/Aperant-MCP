@@ -432,5 +432,33 @@
   "referenceImages": {
     "title": "Reference Images (optional)",
     "description": "Add visual references like screenshots or designs to help the AI understand your requirements."
+  },
+  "inlineReview": {
+    "tab": "Diff & Review",
+    "noFiles": "No changed files",
+    "selectFile": "Select a file to view the diff.",
+    "noHunks": "No diff content for this file.",
+    "addComment": "Add comment",
+    "commentPlaceholder": "Leave a review comment for the AI to triage…",
+    "commentSubmit": "Add comment",
+    "openComments": "{{count}} open comment(s)",
+    "noComments": "No comments yet",
+    "doneReview": "Done Review",
+    "triageTitle": "AI Review Triage",
+    "triageDescription": "The AI classified each comment. Override any verdict before applying.",
+    "triageRunning": "Running classifier…",
+    "noDecisions": "No comments to triage.",
+    "verdict": "Verdict",
+    "verdictRedo": "Redo",
+    "verdictFollowUp": "Follow-up task",
+    "verdictWontfix": "Wontfix",
+    "followUpTitlePlaceholder": "Follow-up task title",
+    "applying": "Applying…",
+    "applyDecisions": "Apply decisions",
+    "refresh": "Refresh",
+    "refreshedAt": "Refreshed",
+    "openInVSCode": "Open in VS Code",
+    "noWorktree": "No worktree available",
+    "diffUnavailable": "Diff data not available for this task. The worktree may have been merged or discarded."
   }
 }

@@ -84,62 +84,52 @@ describe('killProcessGracefully', () => {
       mockPlatform('win32');
     });
 
-    it('calls process.kill() without signal argument', () => {
-      killProcessGracefully(mockProcess);
-      expect(mockProcess.kill).toHaveBeenCalledWith();
-    });
-
-    it('schedules taskkill as fallback after timeout', () => {
+    it('calls taskkill immediately (not childProcess.kill)', () => {
+      // Windows now kills via taskkill /f /t immediately to kill the whole
+      // process tree. childProcess.kill() is only called if spawn fails.
       killProcessGracefully(mockProcess);
 
-      // Verify taskkill not called yet
-      expect(mockSpawn).not.toHaveBeenCalled();
-
-      // Advance past the timeout
-      vi.advanceTimersByTime(GRACEFUL_KILL_TIMEOUT_MS);
-
-      // Verify taskkill was called with correct arguments
       expect(mockSpawn).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\taskkill.exe',
         ['/pid', '12345', '/f', '/t'],
-        expect.objectContaining({
-          stdio: 'ignore',
-          detached: true
-        })
+        expect.objectContaining({ stdio: 'ignore', detached: true })
+      );
+      expect(mockProcess.kill).not.toHaveBeenCalled();
+    });
+
+    it('calls taskkill immediately — no timer needed', () => {
+      killProcessGracefully(mockProcess);
+
+      // taskkill is called synchronously, not after a delay
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'C:\\Windows\\System32\\taskkill.exe',
+        ['/pid', '12345', '/f', '/t'],
+        expect.objectContaining({ stdio: 'ignore', detached: true })
       );
     });
 
-    it('skips taskkill if process exits before timeout', () => {
+    it('taskkill is called even if process exits first (it is immediate)', () => {
       killProcessGracefully(mockProcess);
 
-      // Simulate process exit before timeout
-      mockProcess.emit('exit', 0);
-
-      // Advance past the timeout
-      vi.advanceTimersByTime(GRACEFUL_KILL_TIMEOUT_MS);
-
-      // Verify taskkill was NOT called
-      expect(mockSpawn).not.toHaveBeenCalled();
-    });
-
-    it('runs taskkill even if .kill() throws (Issue #1 fix)', () => {
-      // Make .kill() throw an error
-      (mockProcess.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {
-        throw new Error('Process already dead');
-      });
-
-      // Should not throw
-      expect(() => killProcessGracefully(mockProcess)).not.toThrow();
-
-      // Advance past the timeout
-      vi.advanceTimersByTime(GRACEFUL_KILL_TIMEOUT_MS);
-
-      // taskkill should still be called - this is the key assertion for Issue #1
+      // taskkill is already called before any exit event can fire
       expect(mockSpawn).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\taskkill.exe',
         ['/pid', '12345', '/f', '/t'],
         expect.any(Object)
       );
+    });
+
+    it('falls back to childProcess.kill() if spawn throws (Issue #1 fix)', () => {
+      // Make spawn throw so the fallback path runs
+      mockSpawn.mockImplementation(() => {
+        throw new Error('spawn failed');
+      });
+
+      // Should not throw even when spawn fails
+      expect(() => killProcessGracefully(mockProcess)).not.toThrow();
+
+      // Fallback: childProcess.kill() called when taskkill spawn fails
+      expect(mockProcess.kill).toHaveBeenCalled();
     });
 
     it('does not schedule taskkill if pid is undefined', () => {
@@ -228,17 +218,16 @@ describe('killProcessGracefully', () => {
       mockPlatform('win32');
     });
 
-    it('uses custom timeout when provided', () => {
+    it('calls taskkill immediately (timeoutMs not used on Windows)', () => {
       const customTimeout = 1000;
       killProcessGracefully(mockProcess, { timeoutMs: customTimeout });
 
-      // Should not trigger at default timeout
-      vi.advanceTimersByTime(customTimeout - 1);
-      expect(mockSpawn).not.toHaveBeenCalled();
-
-      // Should trigger at custom timeout
-      vi.advanceTimersByTime(1);
-      expect(mockSpawn).toHaveBeenCalled();
+      // On Windows, taskkill is called immediately — no timer
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'C:\\Windows\\System32\\taskkill.exe',
+        ['/pid', '12345', '/f', '/t'],
+        expect.objectContaining({ stdio: 'ignore', detached: true })
+      );
     });
 
     it('logs debug messages when debug is enabled', () => {
@@ -251,7 +240,8 @@ describe('killProcessGracefully', () => {
 
       expect(warnSpy).toHaveBeenCalledWith(
         '[TestPrefix]',
-        'Graceful kill signal sent'
+        'Running taskkill /f /t for PID:',
+        12345
       );
 
       warnSpy.mockRestore();
@@ -306,8 +296,9 @@ describe('killProcessGracefully', () => {
   });
 
   describe('timer cleanup (memory leak prevention)', () => {
+    // Unix only: Windows uses immediate taskkill (no timer to clean up)
     beforeEach(() => {
-      mockPlatform('win32');
+      mockPlatform('darwin');
     });
 
     it('clears timeout when process exits before timeout fires', () => {
@@ -318,7 +309,7 @@ describe('killProcessGracefully', () => {
       // Simulate process exit before timeout
       mockProcess.emit('exit', 0);
 
-      // clearTimeout should have been called
+      // clearTimeout should have been called (Unix has a SIGKILL timer)
       expect(clearTimeoutSpy).toHaveBeenCalled();
 
       clearTimeoutSpy.mockRestore();

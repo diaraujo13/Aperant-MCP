@@ -129,6 +129,8 @@ export function Sidebar({
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
 
+  const isTauriEnv = '__TAURI_INTERNALS__' in window;
+
   const selectedProject = projects.find((p) => p.id === currentProjectId);
 
   // Sidebar collapsed state from settings
@@ -598,7 +600,7 @@ export function Sidebar({
                 <li>{t('dialogs:initialize.setupSpecs')}</li>
               </ul>
             </div>
-            {!settings.autoBuildPath && (
+            {!settings.autoBuildPath && !isTauriEnv && (
               <div className="mt-4 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
@@ -618,7 +620,7 @@ export function Sidebar({
             </Button>
             <Button
               onClick={handleInitialize}
-              disabled={isInitializing || !settings.autoBuildPath}
+              disabled={isInitializing || (!isTauriEnv && !settings.autoBuildPath)}
             >
               {isInitializing ? (
                 <>

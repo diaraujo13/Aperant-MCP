@@ -150,6 +150,11 @@ export function App() {
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
 
+  // True when running inside the Tauri webview (not the legacy Electron build).
+  // Tauri's project_initialize doesn't need settings.autoBuildPath; it just
+  // creates .auto-claude/specs/, so we skip that guard in this context.
+  const isTauriEnv = '__TAURI_INTERNALS__' in window;
+
   // Initialize dialog state
   const [showInitDialog, setShowInitDialog] = useState(false);
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
@@ -1186,7 +1191,7 @@ export function App() {
                   <li>{t('initialize.setupSpecs')}</li>
                 </ul>
               </div>
-              {!settings.autoBuildPath && (
+              {!settings.autoBuildPath && !isTauriEnv && (
                 <div className="mt-4 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
@@ -1219,7 +1224,7 @@ export function App() {
               </Button>
               <Button
                 onClick={handleInitialize}
-                disabled={isInitializing || !settings.autoBuildPath}
+                disabled={isInitializing || (!isTauriEnv && !settings.autoBuildPath)}
               >
                 {isInitializing ? (
                   <>

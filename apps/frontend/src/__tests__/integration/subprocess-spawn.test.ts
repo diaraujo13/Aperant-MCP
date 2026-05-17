@@ -70,7 +70,17 @@ const mockProfileManager = {
   getProfileToken: (_profileId: string) => 'mock-decrypted-token-for-testing',
   // Environment methods for rate-limit-detector delegation
   getActiveProfileEnv: () => ({}),
-  getProfileEnv: (_profileId: string) => ({})
+  getProfileEnv: (_profileId: string) => ({}),
+  // Settings methods used by provider-account-service
+  getSettings: () => ({
+    profiles: [{ ...mockProfile, isAuthenticated: true }],
+    activeProfileId: mockProfile.id,
+    autoSwitch: { enabled: false, threshold: 0.9 }
+  }),
+  getAccountPriorityOrder: () => [],
+  setAccountPriorityOrder: vi.fn(),
+  getAutoSwitchSettings: () => ({ enabled: false, threshold: 0.9, defaultProviderId: undefined }),
+  updateAutoSwitchSettings: vi.fn()
 };
 
 vi.mock('../../main/claude-profile-manager', () => ({

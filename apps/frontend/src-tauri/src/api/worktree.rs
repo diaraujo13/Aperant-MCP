@@ -143,30 +143,91 @@ pub async fn worktree_get_status(task_id: String) -> AppResult<IpcResult<Value>>
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn worktree_get_diff(task_id: String) -> AppResult<IpcResult<Value>> {
+    // Renderer expects WorktreeDiff = { files: WorktreeDiffFile[], summary: string }
+    // where WorktreeDiffFile = { path, status: 'added'|'modified'|'deleted'|'renamed', additions, deletions }.
     let result = tokio::task::spawn_blocking(move || -> Value {
         let Some(wt_path) = find_worktree_path(&task_id) else {
-            return json!({ "exists": false, "diff": "" });
+            return json!({ "files": [], "summary": "No worktree found" });
         };
-        let diff = std::process::Command::new("git")
-            .args(["diff", "HEAD"])
+
+        let base = detect_diff_base(&wt_path);
+        let range = format!("{}...HEAD", base);
+
+        let numstat = std::process::Command::new("git")
+            .args(["diff", "--numstat", &range])
             .current_dir(&wt_path)
             .output()
             .ok().filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
             .unwrap_or_default();
-        let staged = std::process::Command::new("git")
-            .args(["diff", "--cached"])
+
+        let name_status = std::process::Command::new("git")
+            .args(["diff", "--name-status", &range])
             .current_dir(&wt_path)
             .output()
             .ok().filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
             .unwrap_or_default();
-        let full = if staged.is_empty() { diff } else if diff.is_empty() { staged } else { format!("{staged}\n{diff}") };
-        json!({ "exists": true, "taskId": task_id, "worktreePath": wt_path.to_string_lossy(), "diff": full, "hasDiff": !full.is_empty() })
+
+        let mut status_map: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+        for line in name_status.lines().filter(|l| !l.is_empty()) {
+            let mut parts = line.splitn(2, '\t');
+            let code = parts.next().unwrap_or("");
+            let path = parts.next().unwrap_or("").to_string();
+            if path.is_empty() { continue; }
+            let status = match code.chars().next().unwrap_or(' ') {
+                'A' => "added",
+                'D' => "deleted",
+                'R' => "renamed",
+                _ => "modified",
+            };
+            status_map.insert(path, status);
+        }
+
+        let mut files: Vec<Value> = Vec::new();
+        let (mut total_add, mut total_del) = (0u64, 0u64);
+        for line in numstat.lines().filter(|l| !l.is_empty()) {
+            let mut cols = line.splitn(3, '\t');
+            let adds: u64 = cols.next().unwrap_or("0").parse().unwrap_or(0);
+            let dels: u64 = cols.next().unwrap_or("0").parse().unwrap_or(0);
+            let path = cols.next().unwrap_or("").to_string();
+            if path.is_empty() { continue; }
+            total_add += adds;
+            total_del += dels;
+            let status = status_map.get(&path).copied().unwrap_or("modified");
+            files.push(json!({
+                "path": path,
+                "status": status,
+                "additions": adds,
+                "deletions": dels,
+            }));
+        }
+
+        let summary = format!(
+            "{} files changed, {} insertions(+), {} deletions(-)",
+            files.len(), total_add, total_del
+        );
+        json!({ "files": files, "summary": summary })
     })
     .await
     .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))?;
     Ok(IpcResult::ok(result))
+}
+
+fn detect_diff_base(worktree_path: &std::path::Path) -> String {
+    // Try main, then master, then fall back to HEAD~1.
+    for branch in ["main", "master"] {
+        let ok = std::process::Command::new("git")
+            .args(["rev-parse", "--verify", branch])
+            .current_dir(worktree_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok { return branch.to_string(); }
+    }
+    "HEAD~1".to_string()
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -336,22 +397,54 @@ pub async fn worktree_open_in_ide(
     ide: String,
     custom_path: Option<String>,
 ) -> AppResult<IpcResult<Value>> {
-    tokio::task::spawn_blocking(move || {
-        let cmd = custom_path.as_deref().unwrap_or(match ide.as_str() {
-            "vscode" => "code",
-            "cursor" => "cursor",
-            "windsurf" => "windsurf",
-            _ => &ide,
+    // Allowlist of supported IDE identifiers. A renderer (or compromised one)
+    // cannot launch arbitrary binaries: `ide` must match an entry, and
+    // `custom_path` is only honored when paired with a known `ide`. The
+    // allowlist also guards `worktree_open_in_terminal` consistency — keep it
+    // in sync with the renderer's IDE picker.
+    let default_cmd = match ide.as_str() {
+        "vscode" => "code",
+        "cursor" => "cursor",
+        "windsurf" => "windsurf",
+        "idea" | "intellij" => "idea",
+        "sublime" => "subl",
+        "zed" => "zed",
+        _ => {
+            return Ok(IpcResult {
+                success: false,
+                data: None,
+                error: Some(format!("unsupported_ide: {ide}")),
+            });
+        }
+    };
+    let cmd = custom_path.as_deref().unwrap_or(default_cmd).to_string();
+    // Defense-in-depth: even with allowlist, custom_path must not look like a
+    // shell metacharacter or pipe.
+    if cmd.contains([';', '|', '&', '\n', '\0']) {
+        return Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some("invalid_executable_path".to_string()),
         });
-        let _ = std::process::Command::new(cmd)
+    }
+    let spawn_result = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        std::process::Command::new(&cmd)
             .arg(&worktree_path)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .spawn();
+            .spawn()?;
+        Ok(())
     })
     .await
     .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))?;
-    Ok(IpcResult::ok(json!({ "opened": true })))
+    match spawn_result {
+        Ok(()) => Ok(IpcResult::ok(json!({ "opened": true }))),
+        Err(err) => Ok(IpcResult {
+            success: false,
+            data: None,
+            error: Some(format!("spawn_failed: {err}")),
+        }),
+    }
 }
 
 #[tauri::command(rename_all = "camelCase")]

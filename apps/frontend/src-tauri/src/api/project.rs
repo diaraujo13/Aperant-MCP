@@ -534,7 +534,23 @@ pub async fn project_initialize(project_id: String) -> AppResult<IpcResult<Value
 
     let is_git = PathBuf::from(&proj_path).join(".git").exists();
 
+    // Persist autoBuildPath so the renderer doesn't re-show the init dialog on restart.
+    let pid = project_id.clone();
+    let _ = mutate_store(move |store| {
+        let mut projects = store.projects();
+        for p in &mut projects {
+            if p.get("id").and_then(|v| v.as_str()) == Some(&pid) {
+                if let Some(obj) = p.as_object_mut() {
+                    obj.insert("autoBuildPath".to_string(), json!(".auto-claude"));
+                }
+            }
+        }
+        store.set_projects(projects);
+        Ok(())
+    });
+
     Ok(IpcResult::ok(json!({
+        "success": true,
         "projectId": project_id,
         "path": proj_path,
         "isGitRepo": is_git,

@@ -24,6 +24,7 @@ export * from './integrations';
 export * from './app-update';
 export * from './cli';
 export * from './pr-status';
+export * from './review-comments';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';
