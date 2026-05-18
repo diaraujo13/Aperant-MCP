@@ -175,7 +175,7 @@ export function registerHuggingFaceLogin(): void {
             args = ['-m', 'huggingface_hub.cli', 'login'];
           }
 
-          debugLog('Spawning:', command, args);
+          debugLog('Spawning:', { command, args });
 
           const loginProcess = spawn(command, args, {
             stdio: ['pipe', 'pipe', 'pipe'],

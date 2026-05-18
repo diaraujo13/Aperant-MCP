@@ -294,7 +294,22 @@
     "maxImagesError": "Maximum de {{count}} images autorisées",
     "invalidTypeError": "Type d'image invalide. Autorisés : {{types}}",
     "removeImage": "Supprimer l'image",
-    "processingError": "Échec du traitement de l'image"
+    "processingError": "Échec du traitement de l'image",
+    "quickActions": "Rapide :",
+    "qa": {
+      "simplify": "Simplifier le code",
+      "simplifyTemplate": "Simplifiez le code : supprimez la duplication et réduisez la complexité inutile.",
+      "tests": "Ajouter des tests",
+      "testsTemplate": "Ajoutez des tests unitaires pour couvrir les cas principaux et les cas limites.",
+      "implement": "Implémenter",
+      "implementTemplate": "Implémentez la fonctionnalité conformément aux exigences.",
+      "fixError": "Corriger l'erreur",
+      "fixErrorTemplate": "Corrigez l'erreur trouvée dans la sortie.",
+      "refactor": "Refactoriser",
+      "refactorTemplate": "Refactorisez pour améliorer la lisibilité et la maintenabilité.",
+      "performance": "Améliorer perf",
+      "performanceTemplate": "Optimisez les performances : identifiez et éliminez les goulots d'étranglement."
+    }
   },
   "review": {
     "mergeTooltip": "Fusionne les changements de la branche worktree de la tâche vers votre branche de base. L'IA résoudra les conflits éventuels. Vous pourrez ensuite choisir de conserver ou de supprimer le worktree."
@@ -310,6 +325,8 @@
   "form": {
     "description": "Description",
     "descriptionPlaceholder": "Décrivez la fonctionnalité, la correction de bug ou l'amélioration que vous souhaitez implémenter. Soyez aussi précis que possible sur les exigences, les contraintes et le comportement attendu.",
+    "refineDescription": "Améliorer la description",
+    "refiningDescription": "Amélioration...",
     "imageAddedSuccess": "Image ajoutée avec succès !",
     "taskTitle": "Titre de la tâche",
     "titlePlaceholder": "Laissez vide pour générer automatiquement à partir de la description",
@@ -325,6 +342,7 @@
     "fastModeNotice": "Nécessite « utilisation supplémentaire » activée sur votre abonnement Claude.",
     "errors": {
       "descriptionRequired": "Veuillez fournir une description",
+      "refineFailed": "Échec de l'amélioration de la description",
       "maxImagesReached": "Maximum de 5 images autorisé",
       "invalidImageType": "Type d'image non valide. Autorisés : PNG, JPEG, GIF, WebP",
       "processPasteFailed": "Échec du traitement de l'image collée",
@@ -414,5 +432,33 @@
   "referenceImages": {
     "title": "Images de référence (facultatif)",
     "description": "Ajoutez des références visuelles comme des captures d'écran ou des conceptions pour aider l'IA à comprendre vos exigences."
+  },
+  "inlineReview": {
+    "tab": "Diff et revue",
+    "noFiles": "Aucun fichier modifié",
+    "selectFile": "Sélectionnez un fichier pour voir le diff.",
+    "noHunks": "Aucun contenu de diff pour ce fichier.",
+    "addComment": "Ajouter un commentaire",
+    "commentPlaceholder": "Laissez un commentaire pour que l'IA le trie…",
+    "commentSubmit": "Ajouter le commentaire",
+    "openComments": "{{count}} commentaire(s) ouvert(s)",
+    "noComments": "Aucun commentaire pour le moment",
+    "doneReview": "Revue terminée",
+    "triageTitle": "Triage IA de la revue",
+    "triageDescription": "L'IA a classé chaque commentaire. Modifiez un verdict avant d'appliquer.",
+    "triageRunning": "Exécution du classificateur…",
+    "noDecisions": "Aucun commentaire à trier.",
+    "verdict": "Verdict",
+    "verdictRedo": "Refaire",
+    "verdictFollowUp": "Tâche de suivi",
+    "verdictWontfix": "À ignorer",
+    "followUpTitlePlaceholder": "Titre de la tâche de suivi",
+    "applying": "Application…",
+    "applyDecisions": "Appliquer les décisions",
+    "refresh": "Actualiser",
+    "refreshedAt": "Actualisé",
+    "openInVSCode": "Ouvrir dans VS Code",
+    "noWorktree": "Aucun worktree disponible",
+    "diffUnavailable": "Données de diff non disponibles pour cette tâche. Le worktree a peut-être été fusionné ou abandonné."
   }
 }

@@ -408,6 +408,10 @@ export class ProjectStore {
     }
 
     try {
+      if (!task.specsPath) {
+        console.error('[ProjectStore] updateTaskStatus: Task has no specsPath:', taskId);
+        return false;
+      }
       // Update implementation_plan.json in task's spec directory
       const planPath = path.join(task.specsPath, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
       if (!existsSync(planPath)) {
@@ -422,6 +426,7 @@ export class ProjectStore {
       // Map TaskStatus to plan status values
       const statusMapping: Record<TaskStatus, string> = {
         'backlog': 'pending',
+        'queue': 'queue',
         'in_progress': 'in_progress',
         'ai_review': 'ai_review',
         'human_review': 'human_review',

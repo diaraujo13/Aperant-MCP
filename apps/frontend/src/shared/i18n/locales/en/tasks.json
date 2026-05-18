@@ -294,7 +294,22 @@
     "maxImagesError": "Maximum of {{count}} images allowed",
     "invalidTypeError": "Invalid image type. Allowed: {{types}}",
     "removeImage": "Remove image",
-    "processingError": "Failed to process image"
+    "processingError": "Failed to process image",
+    "quickActions": "Quick:",
+    "qa": {
+      "simplify": "Simplify code",
+      "simplifyTemplate": "Simplify the code: remove duplication and reduce unnecessary complexity.",
+      "tests": "Add tests",
+      "testsTemplate": "Add unit tests to cover the main cases and edge cases.",
+      "implement": "Implement",
+      "implementTemplate": "Implement the functionality as specified in the requirements.",
+      "fixError": "Fix error",
+      "fixErrorTemplate": "Fix the error found in the output.",
+      "refactor": "Refactor",
+      "refactorTemplate": "Refactor for better readability and maintainability.",
+      "performance": "Improve perf",
+      "performanceTemplate": "Optimize performance: identify and eliminate bottlenecks."
+    }
   },
   "review": {
     "mergeTooltip": "Merges changes from the task's worktree branch back to your base branch. AI will resolve any conflicts. You can then choose whether to keep or remove the worktree."
@@ -310,6 +325,8 @@
   "form": {
     "description": "Description",
     "descriptionPlaceholder": "Describe the feature, bug fix, or improvement you want to implement. Be as specific as possible about requirements, constraints, and expected behavior.",
+    "refineDescription": "Refine description",
+    "refiningDescription": "Refining...",
     "imageAddedSuccess": "Image added successfully!",
     "taskTitle": "Task Title",
     "titlePlaceholder": "Leave empty to auto-generate from description",
@@ -325,6 +342,7 @@
     "fastModeNotice": "Requires \"extra usage\" enabled on your Claude subscription.",
     "errors": {
       "descriptionRequired": "Please provide a description",
+      "refineFailed": "Failed to refine the description",
       "maxImagesReached": "Maximum of 5 images allowed",
       "invalidImageType": "Invalid image type. Allowed: PNG, JPEG, GIF, WebP",
       "processPasteFailed": "Failed to process pasted image",
@@ -414,5 +432,33 @@
   "referenceImages": {
     "title": "Reference Images (optional)",
     "description": "Add visual references like screenshots or designs to help the AI understand your requirements."
+  },
+  "inlineReview": {
+    "tab": "Diff & Review",
+    "noFiles": "No changed files",
+    "selectFile": "Select a file to view the diff.",
+    "noHunks": "No diff content for this file.",
+    "addComment": "Add comment",
+    "commentPlaceholder": "Leave a review comment for the AI to triage…",
+    "commentSubmit": "Add comment",
+    "openComments": "{{count}} open comment(s)",
+    "noComments": "No comments yet",
+    "doneReview": "Done Review",
+    "triageTitle": "AI Review Triage",
+    "triageDescription": "The AI classified each comment. Override any verdict before applying.",
+    "triageRunning": "Running classifier…",
+    "noDecisions": "No comments to triage.",
+    "verdict": "Verdict",
+    "verdictRedo": "Redo",
+    "verdictFollowUp": "Follow-up task",
+    "verdictWontfix": "Wontfix",
+    "followUpTitlePlaceholder": "Follow-up task title",
+    "applying": "Applying…",
+    "applyDecisions": "Apply decisions",
+    "refresh": "Refresh",
+    "refreshedAt": "Refreshed",
+    "openInVSCode": "Open in VS Code",
+    "noWorktree": "No worktree available",
+    "diffUnavailable": "Diff data not available for this task. The worktree may have been merged or discarded."
   }
 }

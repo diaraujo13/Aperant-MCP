@@ -311,6 +311,8 @@
     "rdrMechanisms": {
       "label": "MCP Master LLM RDR Prompt Sending Mechanism",
       "description": "Manage named RDR sending mechanisms. Use template variables: {{message}} (escaped text), {{messagePath}} (temp file path), {{identifier}} (window PID/title), {{scriptPath}} (script file path).",
+      "macosDefaultHint": "Built-in macOS direct send uses Accessibility + Automation permissions to paste into Claude Code. Terminal hosts paste only, so submit manually if needed.",
+      "platformDefaultHint": "This default mechanism uses the built-in platform sender. Leave the template empty unless you want to override it.",
       "templatePlaceholder": "e.g., ccli --message \"$(cat '{{messagePath}}')\"",
       "createDialogTitle": "Create New Mechanism",
       "renameDialogTitle": "Rename Mechanism",

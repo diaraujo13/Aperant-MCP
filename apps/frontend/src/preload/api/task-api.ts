@@ -58,6 +58,7 @@ export interface TaskAPI {
     description: string,
     metadata?: TaskMetadata
   ) => Promise<IPCResult<Task>>;
+  refineTaskDescription: (description: string) => Promise<IPCResult<string>>;
   deleteTask: (taskId: string) => Promise<IPCResult>;
   updateTask: (
     taskId: string,
@@ -106,6 +107,32 @@ export interface TaskAPI {
   toggleTaskRdr: (taskId: string, disabled: boolean) => Promise<IPCResult<boolean>>;
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
 
+  // Inline Code Review
+  getReviewFilePatch: (
+    taskId: string,
+    file: string
+  ) => Promise<IPCResult<import('../../shared/types').ReviewFilePatch>>;
+  listReviewComments: (
+    taskId: string
+  ) => Promise<IPCResult<import('../../shared/types').ReviewComment[]>>;
+  addReviewComment: (
+    taskId: string,
+    input: { file: string; line: number; side: 'LEFT' | 'RIGHT'; body: string }
+  ) => Promise<IPCResult<import('../../shared/types').ReviewComment>>;
+  deleteReviewComment: (taskId: string, commentId: string) => Promise<IPCResult<boolean>>;
+  updateReviewComment: (
+    taskId: string,
+    commentId: string,
+    patch: Partial<Pick<import('../../shared/types').ReviewComment, 'body' | 'status'>>
+  ) => Promise<IPCResult<import('../../shared/types').ReviewComment>>;
+  finalizeReviewTriage: (
+    taskId: string
+  ) => Promise<IPCResult<import('../../shared/types').TriageReport>>;
+  finalizeReviewApply: (
+    taskId: string,
+    decisions: import('../../shared/types').TriageDecision[]
+  ) => Promise<IPCResult<import('../../shared/types').FinalizeReviewResult>>;
+
   // Task Event Listeners
   // Note: projectId is optional for backward compatibility - events without projectId will still work
   onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan, projectId?: string) => void) => () => void;
@@ -131,6 +158,7 @@ export interface TaskAPI {
     newStatus: string;
     timestamp: string;
   }) => void) => () => void;
+  onTaskAutoRefresh: (callback: (data: { reason: string; projectId: string; specId: string }) => void) => () => void;
 
   // Task Phase Logs
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
@@ -151,6 +179,8 @@ export interface TaskAPI {
   getVSCodeWindows: () => Promise<IPCResult<Array<{ handle: number; title: string; processId: number }>>>;
   sendRdrToWindow: (identifier: number | string, message: string) => Promise<IPCResult<{ success: boolean; error?: string }>>;
   sendTestRdrToWindow: (identifier: number | string) => Promise<IPCResult<{ success: boolean; error?: string }>>;
+  getAssignedWindow: (projectId: string) => Promise<IPCResult<AssignedWindow | null>>;
+  setAssignedWindow: (projectId: string, window: { handle: number; processId: number; title: string }) => Promise<IPCResult<AssignedWindow>>;
 
   // Detailed RDR batch info for auto-send
   getRdrBatchDetails: (projectId: string) => Promise<IPCResult<RdrBatchDetails>>;
@@ -182,6 +212,9 @@ export const createTaskAPI = (): TaskAPI => ({
     metadata?: TaskMetadata
   ): Promise<IPCResult<Task>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_CREATE, projectId, title, description, metadata),
+
+  refineTaskDescription: (description: string): Promise<IPCResult<string>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REFINE_DESCRIPTION, description),
 
   deleteTask: (taskId: string): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_DELETE, taskId),
@@ -278,6 +311,22 @@ export const createTaskAPI = (): TaskAPI => ({
 
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions): Promise<IPCResult<WorktreeCreatePRResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_CREATE_PR, taskId, options),
+
+  // Inline Code Review
+  getReviewFilePatch: (taskId, file) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW_FILE_PATCH, taskId, file),
+  listReviewComments: (taskId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW_COMMENTS_LIST, taskId),
+  addReviewComment: (taskId, input) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW_COMMENTS_ADD, taskId, input),
+  deleteReviewComment: (taskId, commentId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW_COMMENTS_DELETE, taskId, commentId),
+  updateReviewComment: (taskId, commentId, patch) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW_COMMENTS_UPDATE, taskId, commentId, patch),
+  finalizeReviewTriage: (taskId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_FINALIZE_REVIEW_TRIAGE, taskId),
+  finalizeReviewApply: (taskId, decisions) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_FINALIZE_REVIEW_APPLY, taskId, decisions),
 
   // Task Event Listeners
   onTaskProgress: (

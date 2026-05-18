@@ -12,14 +12,49 @@ let TEST_DIR: string;
 let USER_DATA_PATH: string;
 let TEST_PROJECT_PATH: string;
 
-// Mock Electron before importing the store
+// Mock electron-compat so project-store uses the temp dir instead of the real
+// ~/Library/Application Support path. project-store imports `app` from
+// '../electron-compat' (not directly from 'electron'), so mocking 'electron'
+// alone has no effect — electron-compat's fallbackApp always wins in tests
+// because process.type is undefined outside Electron.
+vi.mock('../electron-compat', () => ({
+  app: {
+    getPath: vi.fn((name: string) => {
+      if (name === 'userData') return USER_DATA_PATH;
+      return TEST_DIR;
+    }),
+    isPackaged: false,
+    getVersion: vi.fn(() => '0.0.0'),
+  },
+  isElectron: false,
+}));
+
+// Also mock 'electron' because project-store transitively imports sentry.ts
+// which does `import { app, ipcMain } from 'electron'`. Also stub
+// @sentry/electron/main so the test environment doesn't need the real Sentry.
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn((name: string) => {
       if (name === 'userData') return USER_DATA_PATH;
       return TEST_DIR;
     })
+  },
+  ipcMain: {
+    on: vi.fn(),
+    handle: vi.fn(),
+    removeAllListeners: vi.fn(),
+    removeHandler: vi.fn(),
   }
+}));
+
+vi.mock('@sentry/electron/main', () => ({
+  init: vi.fn(),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+  setUser: vi.fn(),
+  setTag: vi.fn(),
+  setContext: vi.fn(),
+  addBreadcrumb: vi.fn(),
 }));
 
 // Setup test directories with unique secure temp dir
@@ -50,7 +85,11 @@ describe('ProjectStore', () => {
 
   afterEach(() => {
     cleanupTestDirs();
-    vi.clearAllMocks();
+    // NOTE: do NOT call vi.clearAllMocks() / vi.resetAllMocks() here. The
+    // electron mock factory uses vi.fn((name) => ...USER_DATA_PATH...) and
+    // clearing it between tests resets the inner implementation, so the next
+    // test's `app.getPath('userData')` returns undefined → store writes to a
+    // bogus path and subsequent file existence checks fail.
   });
 
   describe('addProject', () => {

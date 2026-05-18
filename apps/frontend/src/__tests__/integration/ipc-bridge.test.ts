@@ -142,7 +142,7 @@ describe('IPC Bridge Integration', () => {
         const stopTask = electronAPI['stopTask'] as (id: string) => void;
         stopTask('task-id');
 
-        expect(mockIpcRenderer.send).toHaveBeenCalledWith('task:stop', 'task-id');
+        expect(mockIpcRenderer.send).toHaveBeenCalledWith('task:stop', 'task-id', undefined);
       });
 
       it('should have submitReview method', async () => {

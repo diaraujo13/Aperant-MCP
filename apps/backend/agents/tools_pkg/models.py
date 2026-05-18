@@ -184,6 +184,14 @@ AGENT_CONFIGS = {
         "auto_claude_tools": [],
         "thinking_default": "medium",
     },
+    # Lightweight classifier that triages inline human-review comments into
+    # redo / follow_up / wontfix. Read-only, no MCP — meant for Haiku 4.5.
+    "review_triage": {
+        "tools": BASE_READ_TOOLS,
+        "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "low",
+    },
     # ═══════════════════════════════════════════════════════════════════════
     # BUILD PHASES (Full tools + Graphiti memory)
     # Note: "linear" is conditional on project setting "update_linear_with_tasks"

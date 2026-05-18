@@ -27,6 +27,11 @@ export const taskMock = {
     }
   }),
 
+  refineTaskDescription: async (description: string) => ({
+    success: true,
+    data: description.trim()
+  }),
+
   deleteTask: async () => ({ success: true }),
 
   updateTask: async (_taskId: string, updates: { title?: string; description?: string }) => ({
@@ -58,6 +63,7 @@ export const taskMock = {
   // Task archive operations
   archiveTasks: async () => ({ success: true, data: true }),
   unarchiveTasks: async () => ({ success: true, data: true }),
+  toggleTaskRdr: async (_taskId: string, _disabled: boolean) => ({ success: true, data: true }),
 
   // Task status operations
   updateTaskStatus: async (_taskId: string, _status: string, _options?: { forceCleanup?: boolean }) => ({ success: true }),

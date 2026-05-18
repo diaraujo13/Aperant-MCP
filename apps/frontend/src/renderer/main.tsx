@@ -1,3 +1,6 @@
+// Tauri compatibility shim (no-op in Electron, mounts window.electronAPI when running under Tauri)
+import '../preload/electron-shim';
+
 // Initialize browser mock before anything else (no-op in Electron)
 import './lib/browser-mock';
 

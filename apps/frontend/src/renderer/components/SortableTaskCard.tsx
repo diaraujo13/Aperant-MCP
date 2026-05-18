@@ -9,7 +9,7 @@ interface SortableTaskCardProps {
   task: Task;
   onClick: () => void;
   onStatusChange?: (newStatus: TaskStatus) => unknown;
-  onRefresh?: () => Promise<void>;
+  onRefresh?: () => void | Promise<void>;
   // Optional selection props for multi-selection in Human Review column
   isSelectable?: boolean;
   isSelected?: boolean;

@@ -146,6 +146,7 @@ apps/frontend/python-runtime/
 # ===========================
 apps/frontend/dist/
 apps/frontend/out/
+apps/frontend/out-tauri/
 *.asar
 *.blockmap
 *.snap

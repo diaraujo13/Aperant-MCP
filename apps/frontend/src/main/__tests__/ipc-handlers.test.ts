@@ -12,6 +12,20 @@ import path from "path";
 const TEST_DIR = mkdtempSync(path.join(tmpdir(), "ipc-handlers-test-"));
 const TEST_PROJECT_PATH = path.join(TEST_DIR, "test-project");
 
+// Mock electron-compat so project-store reads from the isolated temp dir
+// (see project-store.test.ts for the full explanation of why this is needed).
+vi.mock("../electron-compat", () => ({
+  app: {
+    getPath: (name: string) =>
+      name === "userData" ? path.join(TEST_DIR, "userData") : TEST_DIR,
+    getAppPath: () => TEST_DIR,
+    getVersion: () => "0.1.0",
+    isPackaged: false,
+    on: vi.fn(),
+  },
+  isElectron: false,
+}));
+
 // Mock electron-updater before importing
 vi.mock("electron-updater", () => ({
   autoUpdater: {
@@ -127,6 +141,7 @@ vi.mock("electron", () => {
       getAppPath: vi.fn(() => TEST_DIR),
       getVersion: vi.fn(() => "0.1.0"),
       isPackaged: false,
+      on: vi.fn(),
     },
     ipcMain: mockIpcMain,
     dialog: {

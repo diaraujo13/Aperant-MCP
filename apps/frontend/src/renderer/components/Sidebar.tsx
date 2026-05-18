@@ -22,6 +22,7 @@ import {
   Heart,
   Wrench,
   Pin,
+  Search,
   PanelLeft,
   PanelLeftClose
 } from 'lucide-react';
@@ -61,13 +62,14 @@ import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
 import { UpdateBanner } from './UpdateBanner';
 import { AutoShutdownToggle } from './AutoShutdownToggle';
-import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
+import type { Project, GitStatus } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools';
 
 interface SidebarProps {
   onSettingsClick: () => void;
   onNewTaskClick: () => void;
+  onGlobalSearchClick: () => void;
   activeView?: SidebarView;
   onViewChange?: (view: SidebarView) => void;
 }
@@ -107,6 +109,7 @@ const gitlabNavItems: NavItem[] = [
 export function Sidebar({
   onSettingsClick,
   onNewTaskClick,
+  onGlobalSearchClick,
   activeView = 'kanban',
   onViewChange
 }: SidebarProps) {
@@ -125,6 +128,8 @@ export function Sidebar({
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
+
+  const isTauriEnv = '__TAURI_INTERNALS__' in window;
 
   const selectedProject = projects.find((p) => p.id === currentProjectId);
 
@@ -308,6 +313,7 @@ export function Sidebar({
     const button = (
       <button
         key={item.id}
+        type="button"
         onClick={() => handleNavClick(item.id)}
         disabled={!currentProjectId}
         aria-keyshortcuts={item.shortcut}
@@ -483,6 +489,22 @@ export function Sidebar({
                   variant="ghost"
                   size={isCollapsed ? "icon" : "sm"}
                   className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
+                  onClick={onGlobalSearchClick}
+                >
+                  <Search className="h-4 w-4" />
+                  {!isCollapsed && t('common:globalSearch.button')}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side={isCollapsed ? "right" : "top"}>
+                {t('common:globalSearch.shortcut')}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size={isCollapsed ? "icon" : "sm"}
+                  className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
                   onClick={onSettingsClick}
                 >
                   <Settings className="h-4 w-4" />
@@ -510,6 +532,7 @@ export function Sidebar({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={() => window.open('https://github.com/sponsors/AndyMik90', '_blank')}
                 className={cn(
                   'flex w-full items-center text-xs transition-colors',
@@ -577,7 +600,7 @@ export function Sidebar({
                 <li>{t('dialogs:initialize.setupSpecs')}</li>
               </ul>
             </div>
-            {!settings.autoBuildPath && (
+            {!settings.autoBuildPath && !isTauriEnv && (
               <div className="mt-4 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
@@ -597,7 +620,7 @@ export function Sidebar({
             </Button>
             <Button
               onClick={handleInitialize}
-              disabled={isInitializing || !settings.autoBuildPath}
+              disabled={isInitializing || (!isTauriEnv && !settings.autoBuildPath)}
             >
               {isInitializing ? (
                 <>

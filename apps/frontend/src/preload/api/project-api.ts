@@ -14,7 +14,8 @@ import type {
   GraphitiConnectionTestResult,
   GitStatus,
   KanbanPreferences,
-  GitBranchDetail
+  GitBranchDetail,
+  GlobalSearchResult
 } from '../../shared/types';
 
 // Tab state interface (persisted in main process)
@@ -76,6 +77,7 @@ export interface ProjectAPI {
     initGit: boolean
   ) => Promise<IPCResult<import('../../shared/types').CreateProjectFolderResult>>;
   getDefaultProjectLocation: () => Promise<string | null>;
+  searchAllProjects: (query: string) => Promise<IPCResult<GlobalSearchResult[]>>;
 
   // Memory Infrastructure Operations (LadybugDB - no Docker required)
   getMemoryInfrastructureStatus: (dbPath?: string) => Promise<IPCResult<InfrastructureStatus>>;
@@ -260,6 +262,9 @@ export const createProjectAPI = (): ProjectAPI => ({
 
   getDefaultProjectLocation: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.DIALOG_GET_DEFAULT_PROJECT_LOCATION),
+
+  searchAllProjects: (query: string): Promise<IPCResult<GlobalSearchResult[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.GLOBAL_SEARCH, query),
 
   // Memory Infrastructure Operations (LadybugDB - no Docker required)
   getMemoryInfrastructureStatus: (dbPath?: string): Promise<IPCResult<InfrastructureStatus>> =>

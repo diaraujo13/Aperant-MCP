@@ -137,8 +137,12 @@ function extractRateLimitResetTime(error: string): Date | undefined {
     }
   }
 
-  // Then try absolute timestamp pattern
-  const absolutePattern = /(?:reset[s]?\s*at[:\s]*|X-RateLimit-Reset[:\s]*)(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?|\d+)/i;
+  // Then try absolute timestamp pattern. Capture optional fractional seconds
+  // and the trailing Z so JS parses as UTC; without Z, JS parses as local time
+  // and shifts the date by the user's TZ offset (e.g. a 5-min-ago ISO string
+  // appeared 3 hours in the future for users in GMT-3, flipping the
+  // `diffMs > 0` branch in getRateLimitMessage).
+  const absolutePattern = /(?:reset[s]?\s*at[:\s]*|X-RateLimit-Reset[:\s]*)(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?|\d+)/i;
   const match = error.match(absolutePattern);
   if (!match) {
     return undefined;

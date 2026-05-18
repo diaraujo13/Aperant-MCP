@@ -12,7 +12,7 @@
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, ChevronDown, ChevronUp, RotateCcw, FolderTree, GitBranch, Info } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, RotateCcw, FolderTree, GitBranch, Info, Wand2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
@@ -63,6 +63,7 @@ export function TaskCreationWizard({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isRefiningDescription, setIsRefiningDescription] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showClassification, setShowClassification] = useState(false);
   const [showFileExplorer, setShowFileExplorer] = useState(false);
@@ -550,6 +551,34 @@ export function TaskCreationWizard({
     }
   };
 
+  const handleRefineDescription = async () => {
+    const trimmedDescription = description.trim();
+    if (!trimmedDescription) {
+      setError(t('tasks:form.errors.descriptionRequired'));
+      return;
+    }
+
+    setIsRefiningDescription(true);
+    setError(null);
+
+    try {
+      const result = await window.electronAPI.refineTaskDescription(trimmedDescription);
+      if (result.success && result.data) {
+        handleDescriptionChange(result.data);
+      } else {
+        const errorKey = result.error === 'descriptionRequired'
+          ? 'tasks:form.errors.descriptionRequired'
+          : 'tasks:form.errors.refineFailed';
+        setError(t(errorKey));
+      }
+    } catch (err) {
+      console.error('[TaskCreationWizard] refineDescription failed:', err);
+      setError(t('tasks:form.errors.refineFailed'));
+    } finally {
+      setIsRefiningDescription(false);
+    }
+  };
+
   const resetForm = () => {
     setTitle('');
     setDescription('');
@@ -716,6 +745,25 @@ export function TaskCreationWizard({
           description={description}
           onDescriptionChange={handleDescriptionChange}
           descriptionPlaceholder={t('tasks:wizard.descriptionPlaceholder')}
+          descriptionActions={(
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRefineDescription}
+              disabled={isCreating || isRefiningDescription || !description.trim()}
+              className="gap-1.5"
+            >
+              {isRefiningDescription ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Wand2 className="h-3.5 w-3.5" />
+              )}
+              {isRefiningDescription
+                ? t('tasks:form.refiningDescription')
+                : t('tasks:form.refineDescription')}
+            </Button>
+          )}
           descriptionOverlay={descriptionOverlay}
           descriptionRef={descriptionRef}
           title={title}
@@ -756,7 +804,7 @@ export function TaskCreationWizard({
           fastMode={fastMode}
           onFastModeChange={setFastMode}
           showFastModeToggle={showFastModeToggle}
-          disabled={isCreating}
+          disabled={isCreating || isRefiningDescription}
           error={error}
           onError={setError}
           onFileReferenceDrop={handleFileReferenceDrop}

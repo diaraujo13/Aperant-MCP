@@ -172,7 +172,7 @@ export async function buildAndRestart(buildCommand: string): Promise<IPCResult<v
     }
 
     // Step 2 & 3: START new process, then QUIT
-    const reopenCommand = settings.autoRestartOnFailure?.reopenCommand;
+    const reopenCommand = settings?.autoRestartOnFailure?.reopenCommand;
 
     if (reopenCommand && reopenCommand.trim()) {
       console.log('[RESTART] Step 2/3: Starting new process:', reopenCommand);
@@ -212,15 +212,17 @@ export async function buildAndRestart(buildCommand: string): Promise<IPCResult<v
  * Save running tasks before restart
  */
 function saveRestartState(reason: RestartState['reason'], agentManager: AgentManager): void {
-  const runningTasks = agentManager.getRunningTasks();
+  const runningTaskIds = agentManager.getRunningTasks();
 
+  // getRunningTasks() returns task IDs only — projectId/status are not available at this layer.
+  // Save what we have; resume logic re-derives the rest from disk via projectStore.
   const state: RestartState = {
     restartedAt: new Date().toISOString(),
     reason,
-    tasks: runningTasks.map(task => ({
-      taskId: task.specId,
-      projectId: task.projectId,
-      status: task.status
+    tasks: runningTaskIds.map(taskId => ({
+      taskId,
+      projectId: '',
+      status: 'in_progress'
     }))
   };
 

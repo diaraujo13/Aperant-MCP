@@ -252,3 +252,58 @@ git push origin v2.8.0
 - Windows binaries are code signed
 - All binaries are scanned with VirusTotal
 - SHA256 checksums are generated for all artifacts
+
+---
+
+## Tauri Release (Parallel Pipeline)
+
+The Tauri 2 shell ships its own bundles independently of the Electron release
+flow. Both pipelines coexist during the migration so each can be promoted or
+rolled back without touching the other.
+
+### Tag namespace
+
+| Pipeline | Tag prefix | Workflow |
+| --- | --- | --- |
+| Electron | `v*` (e.g. `v2.8.0`) | `.github/workflows/release.yml` |
+| Tauri | `tauri-v*` (e.g. `tauri-v0.2.0-beta.0`) | `.github/workflows/tauri-release.yml` |
+
+Tag namespaces are disjoint by design — pushing `tauri-v*` does NOT trigger
+the Electron release, and vice versa.
+
+### Cutting a Tauri release
+
+```bash
+# 1. Bump version in BOTH places (must match):
+#    - apps/frontend/src-tauri/tauri.conf.json -> "version"
+#    - apps/frontend/src-tauri/Cargo.toml      -> version = "..."
+# 2. Commit the bump.
+# 3. Tag and push.
+git tag tauri-v0.2.0-beta.0
+git push origin tauri-v0.2.0-beta.0
+```
+
+The workflow builds 4 platforms via `tauri-apps/tauri-action@v0` (macOS
+aarch64 + x86_64, Linux x86_64, Windows x86_64) and creates a draft GitHub
+release with bundles attached.
+
+### Signing posture
+
+| Platform | Status | Notes |
+| --- | --- | --- |
+| macOS | Auto-signed/notarized when `APPLE_*` secrets are set | Same secrets as Electron release |
+| Linux | Unsigned | AppImage/deb conventional |
+| Windows | Unsigned (placeholder) | Authenticode integration deferred — Azure Trusted Signing flow does not slot cleanly into `tauri-action`'s lifecycle |
+
+### Promoting Tauri to default
+
+When the Tauri shell reaches feature parity:
+
+1. Merge `tauri-migration` into `develop`.
+2. Repoint `npm start` and `npm run dev` to the Tauri scripts in
+   `apps/frontend/package.json` (currently `dev:tauri` / `build:tauri`).
+3. Update `release.yml` to call `tauri build` instead of `electron-builder`,
+   OR retire `release.yml` and rely solely on `tauri-release.yml`.
+4. Bump the unified version (e.g. `v3.0.0`) and tag.
+
+Until step 4 lands, both pipelines stay live and independent.

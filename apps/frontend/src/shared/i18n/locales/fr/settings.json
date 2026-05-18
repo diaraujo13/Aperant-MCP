@@ -310,6 +310,8 @@
     "rdrMechanisms": {
       "label": "Mécanisme d'envoi de prompts RDR MCP au LLM maître",
       "description": "Gérez les mécanismes d'envoi RDR nommés. Variables de modèle : {{message}} (texte échappé), {{messagePath}} (chemin fichier temp), {{identifier}} (PID/titre fenêtre), {{scriptPath}} (chemin fichier script).",
+      "macosDefaultHint": "L'envoi direct macOS intégré utilise les permissions Accessibilité + Automatisation pour coller dans Claude Code. Dans les terminaux, il colle seulement, donc validez manuellement si nécessaire.",
+      "platformDefaultHint": "Ce mécanisme par défaut utilise l'expéditeur intégré à la plateforme. Laissez le modèle vide sauf si vous voulez le remplacer.",
       "templatePlaceholder": "ex: ccli --message \"$(cat '{{messagePath}}')\"",
       "createDialogTitle": "Créer un nouveau mécanisme",
       "renameDialogTitle": "Renommer le mécanisme",

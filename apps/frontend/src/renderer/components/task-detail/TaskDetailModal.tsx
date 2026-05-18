@@ -43,6 +43,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
+import { InlineReview } from './task-review/InlineReview';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -504,6 +505,17 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {t('tasks:files.tab')}
                     </TabsTrigger>
                   )}
+                  {/* Diff & Review tab — visible whenever a worktree may exist
+                      (any active or finished-but-not-merged state). The component
+                      itself shows an empty state if no diff is available. */}
+                  {['human_review', 'errors', 'error', 'ai_review', 'in_progress', 'plan_review'].includes(task.status) && (
+                    <TabsTrigger
+                      value="review"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                    >
+                      {t('tasks:inlineReview.tab', 'Diff & Review')}
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 {/* Overview Tab */}
@@ -586,6 +598,21 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 {showFilesTab && (
                   <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden mt-0">
                     <TaskFiles task={task} />
+                  </TabsContent>
+                )}
+
+                {/* Diff & Review Tab — InlineReview self-loads the diff when
+                    the parent hook hasn't loaded it (states other than
+                    human_review). */}
+                {['human_review', 'errors', 'error', 'ai_review', 'in_progress', 'plan_review'].includes(task.status) && (
+                  <TabsContent value="review" className="flex-1 min-h-0 overflow-hidden mt-0">
+                    <div className="h-full p-4">
+                      <InlineReview
+                        taskId={task.id}
+                        worktreeDiff={state.worktreeDiff}
+                        onFinalized={handleClose}
+                      />
+                    </div>
                   </TabsContent>
                 )}
               </Tabs>

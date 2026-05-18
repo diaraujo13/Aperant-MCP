@@ -136,7 +136,7 @@ async function deleteDirectoryWithRetry(
       console.warn(`${logPrefix} Node.js rm() failed, trying cmd /c rd /s /q fallback...`);
       execFileSync('cmd.exe', ['/c', 'rd', '/s', '/q', `"${dirPath}"`], {
         timeout: 60000,
-        windowsVerbatimArguments: true
+        shell: true
       });
       return;
     } catch {

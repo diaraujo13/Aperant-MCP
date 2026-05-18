@@ -28,14 +28,9 @@ export type TaskComplexity = 'trivial' | 'small' | 'medium' | 'large' | 'complex
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 // Task status (from Kanban board)
-export type TaskStatus =
-  | 'backlog'
-  | 'in_progress'
-  | 'ai_review'
-  | 'human_review'
-  | 'pr_created'
-  | 'done'
-  | 'error';
+// Re-exported from shared types so MCP and renderer stay in sync.
+import type { TaskStatus } from '../../shared/types/task';
+export type { TaskStatus };
 
 /**
  * Per-phase model configuration
@@ -199,6 +194,11 @@ export interface TaskSummary {
   status: TaskStatus;
   createdAt: string;
   updatedAt?: string;
+  // Optional fields populated when summarizing rich Task records (used by intervention listing)
+  specId?: string;
+  id?: string;
+  reviewReason?: string;
+  subtasks?: Array<{ status: string; id?: string; title?: string; name?: string }>;
 }
 
 /**
@@ -214,6 +214,15 @@ export interface TaskStatusDetail {
   completedSubtasks?: number;
   error?: string;
   reviewReason?: string;
+  // Optional fields populated when sourced from a full Task record (used by error-detail and log tools)
+  specId?: string;
+  id?: string;
+  description?: string;
+  subtasks?: Array<{ id?: string; title?: string; status: string; name?: string; description?: string }>;
+  qaReport?: unknown;
+  exitReason?: string;
+  rateLimitInfo?: unknown;
+  executionProgress?: { phase?: string };
 }
 
 /**

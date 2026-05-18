@@ -52,12 +52,13 @@ import { SDKRateLimitModal } from './components/SDKRateLimitModal';
 import { AuthFailureModal } from './components/AuthFailureModal';
 import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
-import { AppUpdateNotification } from './components/AppUpdateNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
+import { GlobalSearchDialog } from './components/GlobalSearchDialog';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
 import { useTaskStore, loadTasks } from './stores/task-store';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
+import { switchSession as switchInsightsSession } from './stores/insights-store';
 import { useClaudeProfileStore, loadClaudeProfiles } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
 import { useDesktopStore, loadDesktopState as loadDesktopStateStore } from './stores/desktop-store';
@@ -68,7 +69,7 @@ import { useIpcListeners } from './hooks/useIpc';
 import { useGlobalTerminalListeners } from './hooks/useGlobalTerminalListeners';
 import { useTerminalProfileChange } from './hooks/useTerminalProfileChange';
 import { COLOR_THEMES, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_DEFAULT } from '../shared/constants';
-import type { Task, Project, ColorTheme } from '../shared/types';
+import type { Task, Project, ColorTheme, GlobalSearchResult } from '../shared/types';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider } from './contexts/ViewStateContext';
@@ -147,6 +148,12 @@ export function App() {
   const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
   const [isVersionWarningModalOpen, setIsVersionWarningModalOpen] = useState(false);
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+
+  // True when running inside the Tauri webview (not the legacy Electron build).
+  // Tauri's project_initialize doesn't need settings.autoBuildPath; it just
+  // creates .auto-claude/specs/, so we skip that guard in this context.
+  const isTauriEnv = '__TAURI_INTERNALS__' in window;
 
   // Initialize dialog state
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -215,6 +222,39 @@ export function App() {
       cleanupProjectActivated();
     };
   }, [openProjectTab, setActiveProject, setDesktopSnapshot]);
+
+  useEffect(() => {
+    const handleGlobalSearchShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsGlobalSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalSearchShortcut);
+    return () => window.removeEventListener('keydown', handleGlobalSearchShortcut);
+  }, []);
+
+  const handleGlobalSearchSelect = useCallback(async (result: GlobalSearchResult) => {
+    openProjectTab(result.projectId);
+    setActiveProject(result.projectId);
+
+    if (result.type === 'task') {
+      setActiveView('kanban');
+      await loadTasks(result.projectId);
+      const refreshedTask = useTaskStore.getState().tasks.find(
+        (task) => task.id === result.taskId || task.specId === result.specId
+      );
+      if (refreshedTask) {
+        setSelectedTask(refreshedTask);
+      }
+      return;
+    }
+
+    setSelectedTask(null);
+    setActiveView('insights');
+    await switchInsightsSession(result.projectId, result.sessionId);
+  }, [openProjectTab, setActiveProject]);
 
   useEffect(() => {
     if (!window.platform?.isWindows) {
@@ -933,6 +973,7 @@ export function App() {
         <Sidebar
           onSettingsClick={() => setIsSettingsDialogOpen(true)}
           onNewTaskClick={() => setIsNewTaskDialogOpen(true)}
+          onGlobalSearchClick={() => setIsGlobalSearchOpen(true)}
           activeView={activeView}
           onViewChange={setActiveView}
         />
@@ -1076,6 +1117,12 @@ export function App() {
           onOpenInbuiltTerminal={handleOpenInbuiltTerminal}
         />
 
+        <GlobalSearchDialog
+          open={isGlobalSearchOpen}
+          onOpenChange={setIsGlobalSearchOpen}
+          onSelectResult={handleGlobalSearchSelect}
+        />
+
         {/* Dialogs */}
         {(activeProjectId || selectedProjectId) && (
           <TaskCreationWizard
@@ -1144,7 +1191,7 @@ export function App() {
                   <li>{t('initialize.setupSpecs')}</li>
                 </ul>
               </div>
-              {!settings.autoBuildPath && (
+              {!settings.autoBuildPath && !isTauriEnv && (
                 <div className="mt-4 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
@@ -1177,7 +1224,7 @@ export function App() {
               </Button>
               <Button
                 onClick={handleInitialize}
-                disabled={isInitializing || !settings.autoBuildPath}
+                disabled={isInitializing || (!isTauriEnv && !settings.autoBuildPath)}
               >
                 {isInitializing ? (
                   <>
@@ -1270,9 +1317,6 @@ export function App() {
             setIsSettingsDialogOpen(true);
           }}
         />
-
-        {/* App Update Notification - shows when new app version is available */}
-        <AppUpdateNotification />
 
         {/* Global Download Indicator - shows Ollama model download progress */}
         <GlobalDownloadIndicator />

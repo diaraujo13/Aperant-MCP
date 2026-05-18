@@ -1,0 +1,110 @@
+# Tauri Release
+#
+# Builds, optionally signs, and publishes Tauri bundles for all four target
+# platforms as GitHub release assets. Runs on push of a `tauri-v*` tag (which
+# stays separate from the existing Electron `v*` tags so the two release
+# pipelines never clash).
+#
+# Signing posture:
+#   - macOS notarization activates only when APPLE_ID and friends are present.
+#     When secrets are absent, the bundle ships unsigned (Gatekeeper will warn
+#     on first launch — acceptable for early Tauri adopter releases).
+#   - Windows Authenticode is intentionally NOT integrated yet. The existing
+#     Azure Trusted Signing flow in release.yml requires custom orchestration
+#     that doesn't fit tauri-action's lifecycle. Track that as follow-up.
+#   - Linux AppImage/deb are unsigned by convention.
+
+name: Tauri Release
+
+on:
+  push:
+    tags:
+      - 'tauri-v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name to release (e.g. tauri-v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: macos-aarch64, os: macos-14,     rust_target: aarch64-apple-darwin }
+          - { name: macos-x86_64,  os: macos-13,     rust_target: x86_64-apple-darwin }
+          - { name: linux-x86_64,  os: ubuntu-22.04, rust_target: x86_64-unknown-linux-gnu }
+          - { name: windows-x86_64, os: windows-2022, rust_target: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system dependencies
+        if: matrix.platform.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.rust_target }}
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/frontend/src-tauri/target
+          key: cargo-release-${{ matrix.platform.name }}-${{ hashFiles('apps/frontend/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-release-${{ matrix.platform.name }}-
+
+      - name: Install workspace deps (root, npm workspaces)
+        run: npm ci
+
+      # NOTE: Apple signing/notarization intentionally NOT wired here.
+      # tauri-action interprets APPLE_CERTIFICATE="" (the value of an unset
+      # secret) as "import this cert" and fails before bundling. To enable
+      # notarization later: add APPLE_CERTIFICATE + APPLE_CERTIFICATE_PASSWORD
+      # + APPLE_SIGNING_IDENTITY + APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+      # + APPLE_TEAM_ID as repo secrets, then re-add an `env:` block with
+      # those variables to this step.
+      - name: Build + bundle + publish via tauri-action (unsigned)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/frontend
+          tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
+          releaseName: 'Tauri ${{ github.event.inputs.tag_name || github.ref_name }}'
+          releaseBody: |
+            Tauri 2 production bundle for Aperant-MCP. Built from `${{ github.sha }}`.
+
+            **Unsigned build.** macOS shows "developer not verified" on first
+            launch (Right-click → Open). To enable notarization, add Apple
+            secrets per .github/workflows/tauri-release.yml header.
+          releaseDraft: true
+          prerelease: true
+          includeUpdaterJson: false
+          args: --target ${{ matrix.platform.rust_target }}

@@ -128,32 +128,38 @@ export function toTaskMetadata(options?: TaskOptions): TaskMetadata {
     providerId: options.provider,  // Provider name passed through — resolved to account ID at spawn time
   };
 
-  // Convert phase models
-  if (options.phaseModels) {
+  // Convert phase models — only set when all four phases are provided (PhaseModelConfig requires all)
+  const pm = options.phaseModels;
+  if (pm && pm.specCreation && pm.planning && pm.coding && pm.qaReview) {
     metadata.isAutoProfile = true;
     metadata.phaseModels = {
-      spec: options.phaseModels.specCreation,
-      planning: options.phaseModels.planning,
-      coding: options.phaseModels.coding,
-      qa: options.phaseModels.qaReview,
+      spec: pm.specCreation,
+      planning: pm.planning,
+      coding: pm.coding,
+      qa: pm.qaReview,
     };
   }
 
-  // Convert phase thinking
-  if (options.phaseThinking) {
+  // Convert phase thinking — same all-or-nothing constraint
+  const pt = options.phaseThinking;
+  if (pt && pt.specCreation !== undefined && pt.planning !== undefined && pt.coding !== undefined && pt.qaReview !== undefined) {
+    const toLevel = (n: number): 'low' | 'medium' | 'high' => (n <= 1 ? 'low' : n >= 3 ? 'high' : 'medium');
     metadata.phaseThinking = {
-      spec: options.phaseThinking.specCreation,
-      planning: options.phaseThinking.planning,
-      coding: options.phaseThinking.coding,
-      qa: options.phaseThinking.qaReview,
+      spec: toLevel(pt.specCreation),
+      planning: toLevel(pt.planning),
+      coding: toLevel(pt.coding),
+      qa: toLevel(pt.qaReview),
     };
   }
 
   // Convert referenced files
   if (options.referencedFiles && options.referencedFiles.length > 0) {
     metadata.referencedFiles = options.referencedFiles.map(filePath => ({
+      id: filePath,
       path: filePath,
-      type: 'file' as const,
+      name: filePath.split(/[\\/]/).pop() || filePath,
+      isDirectory: false,
+      addedAt: new Date(),
     }));
   }
 
@@ -315,14 +321,17 @@ export function listTasks(
       filteredTasks = tasks.filter(t => t.status === statusFilter);
     }
 
+    const toIso = (d: Date | string | undefined): string =>
+      d instanceof Date ? d.toISOString() : (d || new Date().toISOString());
+
     const summaries: TaskSummary[] = filteredTasks.map(task => ({
       taskId: task.specId,
       projectPath: project.path, // ADD THIS - fixes MCP tools that need to write files
       title: task.title,
       description: task.description || '',
       status: task.status,
-      createdAt: task.createdAt || new Date().toISOString(),
-      updatedAt: task.updatedAt,
+      createdAt: toIso(task.createdAt),
+      updatedAt: task.updatedAt ? toIso(task.updatedAt) : undefined,
     }));
 
     return { success: true, data: summaries };
@@ -353,15 +362,17 @@ export function getTaskStatus(
       return { success: false, error: `Task not found: ${taskId}` };
     }
 
+    const totalSubtasks = task.subtasks?.length ?? 0;
+    const completedSubtasks = task.subtasks?.filter(s => s.status === 'completed').length ?? 0;
+
     const detail: TaskStatusDetail = {
       taskId: task.specId,
       title: task.title,
       status: task.status,
-      phase: task.currentPhase,
-      progress: task.progress,
-      subtaskCount: task.subtaskCount,
-      completedSubtasks: task.completedSubtasks,
-      error: task.error,
+      phase: task.executionProgress?.phase,
+      progress: totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : undefined,
+      subtaskCount: totalSubtasks,
+      completedSubtasks,
       reviewReason: task.reviewReason,
     };
 

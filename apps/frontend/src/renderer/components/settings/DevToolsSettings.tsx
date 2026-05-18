@@ -10,7 +10,7 @@ import { Switch } from '../ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { SettingsSection } from './SettingsSection';
 import type { AppSettings, SupportedIDE, SupportedTerminal } from '../../../shared/types';
-import { DEFAULT_RDR_MECHANISMS } from '../../../shared/constants/config';
+import { DEFAULT_RDR_MECHANISMS, getDefaultRdrMechanismId, RDR_PLATFORM_DEFAULT_TEMPLATE } from '../../../shared/constants/config';
 
 interface DevToolsSettingsProps {
   settings: AppSettings;
@@ -122,8 +122,12 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
 
   // RDR Mechanism Management Handlers
   const mechanisms = settings.rdrMechanisms || DEFAULT_RDR_MECHANISMS;
-  const activeMechanismId = settings.activeMechanismId || mechanisms[0]?.id;
+  const currentPlatform = window.platform?.isMacOS ? 'darwin' : window.platform?.isWindows ? 'win32' : 'linux';
+  const activeMechanismId = settings.activeMechanismId || getDefaultRdrMechanismId(currentPlatform);
   const selectedMechanism = mechanisms.find(m => m.id === activeMechanismId);
+  const selectedMechanismTemplate = selectedMechanism?.template === RDR_PLATFORM_DEFAULT_TEMPLATE
+    ? ''
+    : (selectedMechanism?.template || '');
 
   const handleCreateMechanism = () => {
     const newMechanism = {
@@ -176,7 +180,12 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
 
   const handleUpdateTemplate = (template: string) => {
     const updatedMechanisms = mechanisms.map(m =>
-      m.id === activeMechanismId ? { ...m, template } : m
+      m.id === activeMechanismId
+        ? {
+            ...m,
+            template: m.isDefault && template.trim() === '' ? RDR_PLATFORM_DEFAULT_TEMPLATE : template
+          }
+        : m
     );
 
     onSettingsChange({
@@ -561,6 +570,11 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
               <p className="text-xs text-muted-foreground ml-4">
                 {t('devtools.rdrMechanisms.description', 'Manage named RDR sending mechanisms. Use template variables: {{message}} (escaped text), {{messagePath}} (temp file path), {{identifier}} (window PID/title), {{scriptPath}} (script file path).')}
               </p>
+              {window.platform?.isMacOS && (
+                <p className="text-xs text-muted-foreground ml-4">
+                  {t('devtools.rdrMechanisms.macosDefaultHint', 'Built-in macOS direct send uses Accessibility + Automation permissions to paste into Claude Code. Terminal hosts paste only, so submit manually if needed.')}
+                </p>
+              )}
 
               {/* Mechanism selector + action buttons */}
               <div className="flex items-center gap-2 w-full px-4">
@@ -634,11 +648,20 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
                 <Textarea
                   className="w-full resize-y font-mono text-xs"
                   rows={6}
-                  value={selectedMechanism?.template || ''}
+                  value={selectedMechanismTemplate}
                   onChange={(e) => handleUpdateTemplate(e.target.value)}
                   placeholder={t('devtools.rdrMechanisms.templatePlaceholder', 'e.g., ccli --message "$(cat \'{{messagePath}}\')"')}
                 />
               </div>
+
+              {selectedMechanism?.template === RDR_PLATFORM_DEFAULT_TEMPLATE && (
+                <div className="flex items-start gap-2 p-2 border border-primary/30 bg-primary/5 rounded-md mx-4">
+                  <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    {t('devtools.rdrMechanisms.platformDefaultHint', 'This default mechanism uses the built-in platform sender. Leave the template empty unless you want to override it.')}
+                  </p>
+                </div>
+              )}
 
               {/* Template validation warning */}
               {(() => {

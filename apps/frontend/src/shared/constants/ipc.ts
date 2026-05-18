@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   PROJECT_SET_RDR_ENABLED: 'project:setRdrEnabled',
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
+  GLOBAL_SEARCH: 'search:global',
   PROJECT_AUTOMATION_SETTINGS_CHANGED: 'project:automationSettingsChanged',
 
   // RDR / window assignment operations
@@ -30,6 +31,7 @@ export const IPC_CHANNELS = {
   // Task operations
   TASK_LIST: 'task:list',
   TASK_CREATE: 'task:create',
+  TASK_REFINE_DESCRIPTION: 'task:refineDescription',
   TASK_DELETE: 'task:delete',
   TASK_UPDATE: 'task:update',
   TASK_START: 'task:start',
@@ -59,6 +61,15 @@ export const IPC_CHANNELS = {
   TASK_UNARCHIVE: 'task:unarchive',
   TASK_TOGGLE_RDR: 'task:toggleRdr',  // Toggle RDR auto-recovery for a task
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
+
+  // Inline code review (per-line diff comments + AI triage on "Done Review")
+  TASK_REVIEW_FILE_PATCH: 'task:reviewFilePatch',          // Get unified-diff patch for a single file in a task worktree
+  TASK_REVIEW_COMMENTS_LIST: 'task:reviewCommentsList',    // List inline comments for a task
+  TASK_REVIEW_COMMENTS_ADD: 'task:reviewCommentsAdd',      // Add a single inline comment
+  TASK_REVIEW_COMMENTS_DELETE: 'task:reviewCommentsDelete',// Delete a single inline comment by id
+  TASK_REVIEW_COMMENTS_UPDATE: 'task:reviewCommentsUpdate',// Update body/status of a comment
+  TASK_FINALIZE_REVIEW_TRIAGE: 'task:finalizeReviewTriage',// Run AI classifier on collected comments (no side-effects yet)
+  TASK_FINALIZE_REVIEW_APPLY: 'task:finalizeReviewApply',  // Apply the (possibly human-overridden) triage decisions
 
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',

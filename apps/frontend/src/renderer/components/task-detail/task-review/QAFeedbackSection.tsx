@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, RotateCcw, Loader2, Image as ImageIcon, X } from 'lucide-react';
+import { AlertCircle, RotateCcw, Loader2, Image as ImageIcon, X, Zap } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Textarea } from '../../ui/textarea';
 import {
@@ -52,6 +52,7 @@ export function QAFeedbackSection({
   const [isDragOverTextarea, setIsDragOverTextarea] = useState(false);
   const [pasteSuccess, setPasteSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recentlyClicked, setRecentlyClicked] = useState<string | null>(null);
 
   /**
    * Handle paste event for screenshot support
@@ -261,6 +262,17 @@ export function QAFeedbackSection({
     setError(null);
   }, [images, onImagesChange]);
 
+  /** Inserts a quick-action template into the textarea (appended, not replacing). */
+  const handleQuickAction = useCallback((key: string, template: string) => {
+    const current = feedback.trim();
+    const next = current ? `${current}\n${template}` : template;
+    onFeedbackChange(next);
+    setRecentlyClicked(key);
+    setTimeout(() => setRecentlyClicked(null), 800);
+    // Focus textarea so user can continue typing
+    textareaRef.current?.focus();
+  }, [feedback, onFeedbackChange]);
+
   // Allow submission with either text feedback or images
   const canSubmit = feedback.trim() || images.length > 0;
 
@@ -273,6 +285,37 @@ export function QAFeedbackSection({
       <p className="text-sm text-muted-foreground mb-3">
         {t('feedback.description', 'Found issues? Describe what needs to be fixed and the AI will continue working on it.')}
       </p>
+
+      {/* Quick action chips */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        <span className="flex items-center gap-1 text-xs text-muted-foreground mr-0.5 shrink-0 self-center">
+          <Zap className="h-3 w-3" />
+          {t('feedback.quickActions', 'Quick:')}
+        </span>
+        {([
+          { key: 'simplify',    label: t('feedback.qa.simplify',    'Simplify code'),    template: t('feedback.qa.simplifyTemplate',    'Simplify the code: remove duplication and reduce unnecessary complexity.') },
+          { key: 'tests',       label: t('feedback.qa.tests',       'Add tests'),        template: t('feedback.qa.testsTemplate',       'Add unit tests to cover the main cases and edge cases.') },
+          { key: 'implement',   label: t('feedback.qa.implement',   'Implement'),        template: t('feedback.qa.implementTemplate',   'Implement the functionality as specified in the requirements.') },
+          { key: 'fixError',    label: t('feedback.qa.fixError',    'Fix error'),        template: t('feedback.qa.fixErrorTemplate',    'Fix the error found in the output.') },
+          { key: 'refactor',    label: t('feedback.qa.refactor',    'Refactor'),         template: t('feedback.qa.refactorTemplate',    'Refactor for better readability and maintainability.') },
+          { key: 'performance', label: t('feedback.qa.performance', 'Improve perf'),     template: t('feedback.qa.performanceTemplate', 'Optimize performance: identify and eliminate bottlenecks.') },
+        ] as const).map(({ key, label, template }) => (
+          <button
+            key={key}
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => handleQuickAction(key, template)}
+            className={cn(
+              'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-all duration-150 select-none',
+              'border-border/60 bg-muted/40 text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent-foreground/20',
+              'disabled:opacity-40 disabled:cursor-not-allowed',
+              recentlyClicked === key && 'bg-primary/15 border-primary/40 text-primary scale-95',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Textarea with paste/drop support */}
       <Textarea

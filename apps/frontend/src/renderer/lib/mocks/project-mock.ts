@@ -3,7 +3,7 @@
  */
 
 import { DEFAULT_PROJECT_SETTINGS } from '../../../shared/constants';
-import { mockProjects } from './mock-data';
+import { mockInsightsSessions, mockProjects, mockTasks } from './mock-data';
 
 export const projectMock = {
   addProject: async (projectPath: string) => ({
@@ -103,6 +103,47 @@ export const projectMock = {
   }),
 
   getDefaultProjectLocation: async () => '/Users/demo/projects',
+
+  searchAllProjects: async (query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const taskResults = mockTasks
+      .filter((task) =>
+        [task.title, task.description, task.specId].some((value) => value.toLowerCase().includes(normalizedQuery))
+      )
+      .map((task) => ({
+        id: `task:${task.id}`,
+        type: 'task' as const,
+        projectId: task.projectId,
+        projectName: mockProjects.find((project) => project.id === task.projectId)?.name || 'Mock Project',
+        taskId: task.id,
+        specId: task.specId,
+        title: task.title,
+        status: task.status,
+        snippet: task.description,
+        matchedField: 'description' as const,
+        updatedAt: task.updatedAt
+      }));
+
+    const conversationResults = mockInsightsSessions
+      .filter((session) => session.title.toLowerCase().includes(normalizedQuery))
+      .map((session) => ({
+        id: `conversation:${session.id}`,
+        type: 'conversation' as const,
+        projectId: session.projectId,
+        projectName: mockProjects.find((project) => project.id === session.projectId)?.name || 'Mock Project',
+        sessionId: session.id,
+        sessionTitle: session.title,
+        messageId: `${session.id}-message`,
+        role: 'user' as const,
+        snippet: session.title,
+        updatedAt: session.updatedAt
+      }));
+
+    return {
+      success: true,
+      data: [...taskResults, ...conversationResults]
+    };
+  },
 
   // File explorer operations
   listDirectory: async () => ({

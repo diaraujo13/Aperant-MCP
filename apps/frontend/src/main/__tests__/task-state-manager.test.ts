@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskStateManager } from '../task-state-manager';
-import type { Task, Project } from '../../shared/types';
+import type { Task, Project, TaskStatus } from '../../shared/types';
 
 // Mock dependencies
 vi.mock('../ipc-handlers/utils', () => ({
@@ -268,7 +268,14 @@ describe('TaskStateManager', () => {
     });
 
     it('should return false for unhandled status', () => {
-      const result = manager.handleManualStatusChange(mockTask.id, 'ai_review', mockTask, mockProject);
+      // 'queue' is a valid TaskStatus but not part of the manual-change switch;
+      // ai_review/done/pr_created/in_progress/backlog/human_review are all handled.
+      const result = manager.handleManualStatusChange(
+        mockTask.id,
+        'queue' as TaskStatus,
+        mockTask,
+        mockProject
+      );
       expect(result).toBe(false);
     });
   });

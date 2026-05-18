@@ -1024,7 +1024,8 @@ describe('usage-monitor', () => {
         isAPIProfile: true,
         profileId: 'unknown-profile-1',
         profileName: 'Unknown Provider Profile',
-        baseUrl: 'https://unknown-provider.com/api'
+        baseUrl: 'https://unknown-provider.com/api',
+        provider: 'anthropic' as const,
       };
 
       // Mock API profile with unknown provider baseUrl
@@ -1579,7 +1580,8 @@ describe('usage-monitor', () => {
         isAPIProfile: true,
         profileId: 'api-profile-1',
         profileName: 'API Profile',
-        baseUrl: 'https://api.anthropic.com'
+        baseUrl: 'https://api.anthropic.com',
+        provider: 'anthropic' as const,
       };
 
       // Call fetchUsageViaAPI with predetermined profile
@@ -1676,7 +1678,8 @@ describe('usage-monitor', () => {
         isAPIProfile: false,
         profileId: 'oauth-profile',
         profileName: 'OAuth Profile',
-        baseUrl: 'https://api.anthropic.com'
+        baseUrl: 'https://api.anthropic.com',
+        provider: 'anthropic' as const,
       };
 
       // Call fetchUsageViaAPI with OAuth profile

@@ -67,7 +67,7 @@ interface TaskCardProps {
   task: Task;
   onClick: () => void;
   onStatusChange?: (newStatus: TaskStatus) => unknown;
-  onRefresh?: () => Promise<void>;  // Callback to refresh task list after operations
+  onRefresh?: () => void | Promise<void>;
   // Optional selectable mode props for multi-selection
   isSelectable?: boolean;
   isSelected?: boolean;
@@ -244,11 +244,12 @@ export const TaskCard = memo(function TaskCard({
           console.log('[TaskCard] ℹ️  No onRefresh callback provided');
         }
       } catch (error) {
-        console.error('[TaskCard] ❌ Unarchive failed:', error);
+        const err = error as Error;
+        console.error('[TaskCard] ❌ Unarchive failed:', err);
         console.error('[TaskCard] Error details:', {
-          name: error?.name,
-          message: error?.message,
-          stack: error?.stack
+          name: err?.name,
+          message: err?.message,
+          stack: err?.stack
         });
         // Don't proceed with status change if unarchive failed
         return;
@@ -375,7 +376,7 @@ export const TaskCard = memo(function TaskCard({
     if (result.success) {
       setIsStuck(false);
     } else {
-      console.error('[TaskCard] Recovery failed:', result.message || result.error);
+      console.error('[TaskCard] Recovery failed:', result.message);
     }
     setIsRecovering(false);
   };

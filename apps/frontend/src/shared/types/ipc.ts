@@ -117,6 +117,7 @@ import type {
   RoadmapGenerationStatus,
   PersistedRoadmapProgress
 } from './roadmap';
+import type { GlobalSearchResult } from './search';
 import type {
   LinearTeam,
   LinearProject,
@@ -223,10 +224,11 @@ export interface ElectronAPI {
   // Task operations
   getTasks: (projectId: string, options?: { forceRefresh?: boolean }) => Promise<IPCResult<Task[]>>;
   createTask: (projectId: string, title: string, description: string, metadata?: TaskMetadata) => Promise<IPCResult<Task>>;
+  refineTaskDescription: (description: string) => Promise<IPCResult<string>>;
   deleteTask: (taskId: string) => Promise<IPCResult>;
   updateTask: (taskId: string, updates: { title?: string; description?: string }) => Promise<IPCResult<Task>>;
   startTask: (taskId: string, options?: TaskStartOptions) => void;
-  stopTask: (taskId: string) => void;
+  stopTask: (taskId: string, options?: { skipRdrDisable?: boolean }) => void;
   submitReview: (taskId: string, approved: boolean, feedback?: string, images?: ImageAttachment[]) => Promise<IPCResult>;
   updateTaskStatus: (taskId: string, status: TaskStatus, options?: { forceCleanup?: boolean }) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
   recoverStuckTask: (taskId: string, options?: TaskRecoveryOptions) => Promise<IPCResult<TaskRecoveryResult>>;
@@ -257,6 +259,7 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  toggleTaskRdr: (taskId: string, disabled: boolean) => Promise<IPCResult<boolean>>;
 
   // RDR (Recover Debug Resend) operations
   triggerRdrProcessing: (projectId: string, taskIds: string[]) => Promise<IPCResult<{ processed: number }>>;
@@ -275,14 +278,23 @@ export interface ElectronAPI {
       exitReason?: string;
       subtasks?: Array<{ name: string; status: string }>;
       errorSummary?: string;
+      projectPath?: string;
     }>;
+    projectPath?: string;
   }>>;
   isClaudeCodeBusy: (identifier: number | string) => Promise<IPCResult<boolean>>;
+  getAssignedWindow: (projectId: string) => Promise<IPCResult<import('../../preload/api/task-api').AssignedWindow | null>>;
+  setAssignedWindow: (projectId: string, window: { handle: number; processId: number; title: string }) => Promise<IPCResult<import('../../preload/api/task-api').AssignedWindow>>;
 
   // RDR Rate Limit Pause
-  getRdrCooldownStatus: () => Promise<IPCResult<{ paused: boolean; reason: string; rateLimitResetAt: number }>>;
-  onRdrRateLimited: (callback: (data: { paused: boolean; reason: string; rateLimitResetAt: number }) => void) => () => void;
+  getRdrCooldownStatus: () => Promise<IPCResult<{ paused: boolean; warning?: boolean; reason: string; rateLimitResetAt: number }>>;
+  onRdrRateLimited: (callback: (data: { paused: boolean; warning?: boolean; reason: string; rateLimitResetAt: number; provider?: string }) => void) => () => void;
   onRdrRateLimitCleared: (callback: (data: { reason: string }) => void) => () => void;
+  onRateLimitAutoResume: (callback: (data: { taskId: string; projectId: string; source: string; profileId: string }) => void) => () => void;
+  startRateLimitWait: (info: unknown) => Promise<IPCResult<{ waitId: string }>>;
+  cancelRateLimitWait: (taskId: string) => Promise<IPCResult<void>>;
+  onRateLimitWaitProgress: (callback: (data: { taskId: string; remainingMs: number; totalMs: number; secondsRemaining: number }) => void) => () => void;
+  onRateLimitWaitComplete: (callback: (data: { taskId: string; source?: string }) => void) => () => void;
 
   // Auto Shutdown (Global - monitors ALL projects)
   getAutoShutdownStatus: () => Promise<IPCResult<AutoShutdownStatus>>;
@@ -291,7 +303,10 @@ export interface ElectronAPI {
 
   // Task event listeners
   onTaskListRefresh: (callback: (projectId: string) => void) => () => void;
+  onTaskAutoRefresh: (callback: (data: { reason: string; projectId: string; specId: string }) => void) => () => void;
   onTaskAutoStart: (callback: (projectId: string, taskId: string) => void) => () => void;
+  onTaskStatusChanged: (callback: (data: { projectId: string; taskId: string; specId: string; oldStatus: TaskStatus; newStatus: TaskStatus }) => void) => () => void;
+  onTaskRegressionDetected: (callback: (data: { projectId: string; specId: string; oldStatus: string; newStatus: string; timestamp: string }) => void) => () => void;
 
   // Event listeners
   onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan, projectId?: string) => void) => () => void;
@@ -299,6 +314,7 @@ export interface ElectronAPI {
   onTaskLog: (callback: (taskId: string, log: string, projectId?: string) => void) => () => void;
   onTaskStatusChange: (callback: (taskId: string, status: TaskStatus, projectId?: string, reviewReason?: ReviewReason) => void) => () => void;
   onTaskExecutionProgress: (callback: (taskId: string, progress: ExecutionProgress, projectId?: string) => void) => () => void;
+  onDebugEvent: (callback: (data: { type: string; taskId?: string; agentKilled?: boolean; timestamp: string; [key: string]: unknown }) => void) => () => void;
 
   // Terminal operations
   createTerminal: (options: TerminalCreateOptions) => Promise<IPCResult>;
@@ -498,6 +514,7 @@ export interface ElectronAPI {
   selectDirectory: () => Promise<string | null>;
   createProjectFolder: (location: string, name: string, initGit: boolean) => Promise<IPCResult<CreateProjectFolderResult>>;
   getDefaultProjectLocation: () => Promise<string | null>;
+  searchAllProjects: (query: string) => Promise<IPCResult<GlobalSearchResult[]>>;
 
   // App info
   getAppVersion: () => Promise<string>;
@@ -617,6 +634,13 @@ export interface ElectronAPI {
     repoFullName: string
   ) => Promise<IPCResult<{ remoteUrl: string }>>;
   listGitHubOrgs: () => Promise<IPCResult<{ orgs: Array<{ login: string; avatarUrl?: string }> }>>;
+  detectHuggingFaceRepo: (projectPath: string) => Promise<IPCResult<{ repoId: string; repoType: string }>>;
+  checkHuggingFaceCli: () => Promise<IPCResult<{ installed: boolean; version?: string }>>;
+  checkHuggingFaceAuth: () => Promise<IPCResult<{ authenticated: boolean; username?: string }>>;
+  getHuggingFaceToken: () => Promise<IPCResult<{ token: string }>>;
+  huggingFaceLogin: (token?: string) => Promise<IPCResult<{ success: boolean }>>;
+  huggingFaceLoginWithToken: (token: string) => Promise<IPCResult<{ success: boolean }>>;
+  installHuggingFaceCli: () => Promise<IPCResult<{ command: string }>>;
 
   // GitHub OAuth device code event (streams device code during auth flow)
   onGitHubAuthDeviceCode: (
@@ -1004,6 +1028,9 @@ export interface ElectronAPI {
     modified: string;
   }>>;
 
+  // Activity tracking
+  recordActivity: (source: string) => void;
+
   // MCP Server health check operations
   checkMcpHealth: (server: CustomMcpServer) => Promise<IPCResult<McpHealthCheckResult>>;
   testMcpConnection: (server: CustomMcpServer) => Promise<IPCResult<McpTestConnectionResult>>;
@@ -1035,5 +1062,7 @@ declare global {
     electronAPI: ElectronAPI;
     DEBUG: boolean;
     platform?: PlatformInfo;
+    /** Electron-specific IPC bridge (not available in Tauri) */
+    electron?: unknown;
   }
 }

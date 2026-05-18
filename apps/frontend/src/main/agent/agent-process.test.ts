@@ -74,13 +74,44 @@ vi.mock('../claude-profile-manager', () => ({
     ensureProfileDir: vi.fn(),
     readProfile: vi.fn(),
     writeProfile: vi.fn(),
-    deleteProfile: vi.fn()
+    deleteProfile: vi.fn(),
+    // Methods needed by provider-account-service and agent-process.
+    // Use plain functions (not vi.fn()) so vi.clearAllMocks() in beforeEach
+    // does not wipe their return values — these methods must always return a
+    // usable shape so the provider-resolution try/catch doesn't swallow the
+    // error and leave apiProfileEnv as {}.
+    getSettings: () => ({
+      profiles: [],
+      activeProfileId: null,
+      autoSwitch: { enabled: false, threshold: 0.9 }
+    }),
+    getAccountPriorityOrder: () => [],
+    setAccountPriorityOrder: vi.fn(),
+    getAutoSwitchSettings: () => ({
+      enabled: false,
+      threshold: 0.9,
+      defaultProviderId: undefined
+    }),
+    updateAutoSwitchSettings: vi.fn()
   }))
+}));
+
+// Mock provider-account-service so provider resolution returns no accounts,
+// causing spawnProcess to fall through to getAPIProfileEnv() (the path tests verify).
+vi.mock('../services/provider-account-service', () => ({
+  getProviderAccountState: vi.fn(async () => ({
+    accounts: [],
+    globalPriorityOrder: [],
+    disabledAutoSwitchAccountIds: []
+  })),
+  getProviderAccountById: vi.fn(async () => null),
+  syncLegacyPriorityOrder: vi.fn(),
 }));
 
 // Mock dependencies
 vi.mock('../services/profile', () => ({
-  getAPIProfileEnv: vi.fn()
+  getAPIProfileEnv: vi.fn(),
+  getAPIProfileEnvById: vi.fn(async () => ({}))
 }));
 
 vi.mock('../rate-limit-detector', () => ({

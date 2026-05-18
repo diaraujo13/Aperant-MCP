@@ -16,6 +16,7 @@ import { getToolPath } from '../../cli-tool-manager';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import { taskStateManager } from '../../task-state-manager';
 import { fileWatcher } from '../../file-watcher';
+import { cancelWaitsForTask } from '../../rate-limit-waiter';
 import { safeBreadcrumb } from '../../sentry';
 
 /**
@@ -338,6 +339,31 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
   );
 
   /**
+   * Refine a task description using AI
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_REFINE_DESCRIPTION,
+    async (_, description: string): Promise<IPCResult<string>> => {
+      const trimmedDescription = description.trim();
+      if (!trimmedDescription) {
+        return { success: false, error: 'descriptionRequired' };
+      }
+
+      try {
+        const refinedDescription = await titleGenerator.refineDescription(trimmedDescription);
+        if (!refinedDescription) {
+          return { success: false, error: 'refineFailed' };
+        }
+
+        return { success: true, data: refinedDescription };
+      } catch (error) {
+        console.error('[TASK_REFINE_DESCRIPTION] Failed to refine description:', error);
+        return { success: false, error: 'refineFailed' };
+      }
+    }
+  );
+
+  /**
    * Delete a task
    *
    * This handler:
@@ -360,6 +386,8 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       if (!task || !project) {
         return { success: false, error: 'Task or project not found' };
       }
+
+      cancelWaitsForTask(taskId);
 
       // Force-kill any running agent process before deletion
       // This ensures file locks are released before we try to delete the worktree

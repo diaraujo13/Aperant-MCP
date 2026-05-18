@@ -102,6 +102,17 @@ export class InsightsService extends EventEmitter {
     return this.sessionManager.renameSession(projectPath, sessionId, newTitle);
   }
 
+  searchSessions(projectPath: string, query: string): Promise<Array<{
+    sessionId: string;
+    sessionTitle: string;
+    messageId: string;
+    role: 'user' | 'assistant';
+    snippet: string;
+    updatedAt: Date;
+  }>> {
+    return this.storage.searchSessions(projectPath, query);
+  }
+
   /**
    * Clear current session (delete messages but keep the session)
    */

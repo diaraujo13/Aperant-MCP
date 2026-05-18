@@ -8,6 +8,7 @@ import type {
   ImplementationPlan,
   TaskExitReason,
   TaskRateLimitInfo,
+  TaskStatus,
 } from "../../shared/types";
 import { XSTATE_SETTLED_STATES, XSTATE_TO_PHASE, mapStateToLegacy } from "../../shared/state-machines";
 import { AgentManager } from "../agent";
@@ -27,10 +28,10 @@ import {
   setRateLimitForTask,
 } from "../rate-limit-detector";
 import { startRateLimitWaitForTask } from "../rate-limit-waiter";
-import { queueTaskForRdr } from "./rdr-handlers";
 import { activityMonitor } from "../activity-monitor";
 import { projectStore } from "../project-store";
 import { getUsageMonitor } from "../claude-profile/usage-monitor";
+import { startTaskFromMain } from "./task/execution-handlers";
 
 /**
  * Register all agent-events-related IPC handlers
@@ -209,22 +210,20 @@ export function registerAgenteventsHandlers(
 
         // Start auto-wait for rate limit reset (only if enabled)
         if (autoResumeEnabled) {
-          const capturedProjectId = project.id;
           const mainWindow = getMainWindow();
           startRateLimitWaitForTask(taskId, rateLimitInfo, mainWindow, () => {
             console.warn(`[Task ${taskId}] Rate limit reset - task can now be resumed`);
             clearRateLimitForTask(taskId);
-
-            // Trigger RDR to send prompt to Claude Code for auto-recovery
-            console.warn(`[Task ${taskId}] Triggering RDR processing after rate limit reset`);
-            const taskInfo = {
-              specId: taskId,
-              status: 'human_review' as const,
-              reviewReason: 'rate_limit_reset',
-              description: `Rate limit reset at ${new Date().toISOString()}. Task ready to resume.`,
-              subtasks: []
-            };
-            queueTaskForRdr(capturedProjectId, taskInfo);
+            console.warn(`[Task ${taskId}] Restarting task directly from main process after rate limit reset`);
+            void startTaskFromMain(taskId, agentManager, getMainWindow)
+              .then((started) => {
+                if (!started) {
+                  console.error(`[Task ${taskId}] Auto-resume after rate limit reset did not start the task`);
+                }
+              })
+              .catch((error) => {
+                console.error(`[Task ${taskId}] Failed to auto-resume after rate limit reset:`, error);
+              });
           });
           console.warn(`[Task ${taskId}] Auto-resume enabled - waiting for rate limit reset`);
         } else {
@@ -518,6 +517,10 @@ export function registerAgenteventsHandlers(
     const result = findTaskAndProject(taskId, projectId);
     if (result) {
       const { task, project } = result;
+      if (!task || !project) {
+        console.warn(`[AgentEvents] force-recovery-revert: task or project missing for ${taskId}`);
+        return;
+      }
 
       // Clear forceRecovery from plan files BEFORE sending XState event.
       // The guard in persistPlanStatusAndReasonSync blocks writes when forceRecovery is active.

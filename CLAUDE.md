@@ -34,7 +34,7 @@ Aperant-MCP is a desktop application (+ CLI) where users describe a goal and AI 
 
 **Fix the system, not the symptom** — When the user reports Auto-Claude task problems (stuck tasks, wrong board, missing RDR detection, incomplete validation), NEVER apply manual one-off fixes (editing JSON files, changing statuses by hand). Instead, fix the underlying system (RDR detection logic, board routing, file watcher, MCP tools) so it handles the case automatically. Manual file edits are acceptable ONLY as a temporary workaround while the systemic fix is being implemented. The goal is always: RDR and the automation pipeline should handle it without human intervention.
 
-**Claude Agent SDK only** — All AI interactions use `claude-agent-sdk`. NEVER use `anthropic.Anthropic()` directly. Always use `create_client()` from `core.client`.
+**Anthropic via SDK only** — All Anthropic API access MUST go through `claude-agent-sdk`. NEVER use `anthropic.Anthropic()` directly. Always use `create_client()` from `core.client`. Non-Anthropic providers (e.g. OpenAI Codex) go through their own modules under `apps/backend/providers/` and are dispatched via the `Provider` protocol — they do not bypass this rule because it is scoped to Anthropic-vendor calls.
 
 **i18n required** — All frontend user-facing text MUST use `react-i18next` translation keys. Never hardcode strings in JSX/TSX. Add keys to both `en/*.json` and `fr/*.json`.
 
@@ -679,25 +679,69 @@ Tools: `take_screenshot`, `click_by_text`, `fill_input`, `get_page_structure`, `
 # CLI only
 cd apps/backend && python run.py --spec 001
 
-# Desktop app
-npm start          # Production build + run
-npm run dev        # Development mode with HMR
-npm run dev:debug  # Debug mode with verbose output
-npm run dev:mcp    # Electron MCP server for AI debugging
+# Desktop app — Tauri 2 is now the DEFAULT for `dev`
+cd apps/frontend
+npm run dev                # = tauri dev (default workflow)
+npm run dev:tauri          # alias of dev
+npm run build:tauri        # Production bundle (.app/.dmg/.msi/.AppImage)
+# Output: apps/frontend/src-tauri/target/release/bundle/
+
+# Desktop app — Electron (legacy, kept for production release until parity)
+npm start                  # Production Electron build + run (UNCHANGED)
+npm run start:electron     # Explicit alias
+npm run dev:electron       # Electron dev mode (was `dev` before promotion)
+npm run dev:debug          # Electron debug mode
+npm run dev:mcp            # Electron MCP server for AI debugging
 
 # Project data: .auto-claude/specs/ (gitignored)
 ```
 
-**With the Electron frontend**:
+### Tauri Migration Status
+
+The Tauri 2 shell builds to a fully functional production bundle on macOS
+aarch64 (8.8 MB binary, 8.2 MB DMG vs ~100+ MB Electron). Cross-platform CI
+matrix in `.github/workflows/tauri-build.yml` validates Linux + Windows +
+both macOS architectures on every push touching `src-tauri/` or the renderer.
+
+**Releasing a Tauri build:**
 
 ```bash
-npm start        # Build and run desktop app
-npm run dev      # Run in development mode (includes --remote-debugging-port=9222 for E2E testing)
+# 1. Bump version in BOTH apps/frontend/src-tauri/tauri.conf.json
+#    and apps/frontend/src-tauri/Cargo.toml (must match).
+# 2. Tag with the tauri-v* prefix (separate from the v* Electron tags
+#    so the two release pipelines never collide):
+git tag tauri-v0.2.0-beta.0
+git push origin tauri-v0.2.0-beta.0
+# 3. .github/workflows/tauri-release.yml builds 4 platforms via
+#    tauri-action and creates a draft GitHub release with the bundles.
+#    macOS notarization activates only when APPLE_* secrets are present.
+#    Windows Authenticode is not yet wired (follow-up).
 ```
 
-**For E2E Testing with QA Agents:**
+**Tests:**
 
-1. Start the Electron app: `npm run dev`
+| Layer | Command | Purpose |
+| --- | --- | --- |
+| Rust unit | `cd apps/frontend/src-tauri && cargo test` | Tauri command logic |
+| Shim unit | `npx vitest run src/preload/__tests__/electron-shim.test.ts` | invoke routing + stub fallback |
+| Bundle smoke | `npm run test:e2e:tauri` | Production bundle loads without 404s/JS errors |
+
+Renderer uses a Proxy-based shim (`src/preload/electron-shim.ts`) that
+mounts `window.electronAPI` and routes ported calls through Tauri `invoke()`
+while gracefully stubbing un-ported methods (logged as `[shim] stub: NAME`
+in DEV). Use `__tauriDebug.test('command_name', args)` from DevTools to
+exercise individual Rust commands.
+
+**With the Electron frontend** (legacy — `npm run dev` is now Tauri):
+
+```bash
+npm start              # Build and run desktop Electron app (production)
+npm run dev:electron   # Electron dev mode (was `dev` before Tauri promotion)
+```
+
+**For E2E Testing with QA Agents (Electron-only — Electron MCP):**
+
+1. Start the Electron app: `npm run dev:electron`
 2. Enable Electron MCP in `apps/backend/.env`: `ELECTRON_MCP_ENABLED=true`
 3. Run QA: `python run.py --spec 001 --qa`
 4. QA agents will automatically interact with the running app for testing

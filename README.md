@@ -1,27 +1,146 @@
-# Aperant-MCP MCP development fork
+# Aperant-MCP — Tauri Migration Fork
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./agpl-3.0.txt)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/KCXaPBr4Dj)
 [![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/@AndreMikalsen)
 [![CI](https://img.shields.io/github/actions/workflow/status/AndyMik90/Auto-Claude/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/AndyMik90/Auto-Claude/actions)
+[![Tauri](https://img.shields.io/badge/Tauri-2.x-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![Mentioned in Awesome Claude Code](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/hesreallyhim/awesome-claude-code)
 
-## Check a quick video demo of some of my implementations (and Aperant's MCP most importantly) https://www.youtube.com/watch?v=NHAm-M8Lawc
+Fork of [Aperant](https://github.com/AndyMik90/Auto-Claude) — extended with a custom MCP system, automatic recovery infrastructure, and a full **Tauri 2 backend** that replaces Electron's Node.js main process with compiled Rust. This fork adds **22,000+ lines** across 114 files on top of the original, including 12,000+ lines of Rust across 23 source files.
 
-# The dev-next and develop branches are currently the same. On develop, I need to add back the edited original root repo README, which had an extra Quick Start entry with the MCP and watchdog instructions README hyperlink. Main has my features implemented, too.
+**This is a great tool for building dynamic pipelines and further automating your agentic workflows. Run overnight batches, let the Master LLM recover stuck tasks autonomously, and ship to a binary that is ~12× smaller than the Electron build.**
 
-## **To get the 'Master LLM' working properly through the MCP, either with RDR or general MCP usage, you'll need to copy the folders inside the skills folder in .claude to your personal \.claude\skills folder.**
+> **Tauri branch:** `tauri-migration` (v0.2.0-beta.0) — `npm run dev` now defaults to Tauri. Electron is preserved as `npm run dev:electron` for production parity until full release.
 
-Fork of [Aperant](https://github.com/AndyMik90/Auto-Claude) with a custom MCP system, automatic recovery, and infrastructure for autonomous overnight batch runs. I added **22,000+ lines** across 114 files on top of main.
+> **MCP note:** The RDR message **delivery pipeline** currently targets **Windows** (PowerShell + Win32 API), **VS Code** (process-level window detection), and **Claude Code** (JSONL transcript reading). The delivery is blind "focus window, paste, enter." Each layer can be swapped independently. Contributions for macOS/Linux or other LLM CLIs are welcome. See [Watchdog Process](#watchdog-process).
 
-**Brief Summary:**
-You can automatically orchestrate and/or troubleshoot your tasks done by LLMs with a master LLM chat through the MCP, sort of like a manager chat. It can work 24/7, with Auto Resume on session limit reset, and has an Auto Shutdown feature to shut down your computer when all tasks are done.
+---
 
-You can make the master LLM create batches of auto-started tasks (use start_requested status on creation to daisy chain, or at prompt end) with prompt inputs, as well as further develop the MCP to improve its maneuverability.
+## Why Tauri? Philosophy & Motivation
 
-**This is a great tool for building dynamic pipelines and further automating your agentic workflows.**
+Electron is the industry standard for cross-platform desktop apps with a web UI — but it pays a heavy price: it ships an entire Chromium browser and a Node.js runtime with every install, regardless of what is already on the user's machine.
 
-> **Note:** The MCP server and all task management tools are standard MCP protocol and work with any MCP client. The RDR message **delivery pipeline** (how recovery prompts physically reach the master LLM that enacts on the MCP) currently targets: **Windows** (PowerShell + Win32 API for clipboard paste + keyboard simulation), **VS Code** (process-level window detection, not extension-specific), and **Claude Code** (JSONL transcript reading for busy-state). The delivery is blind "focus window, paste, enter" — it works when the target chat input is focused but is not tied to any extension API. Each layer can be swapped independently. Contributions for macOS/Linux, other VS Code forks (Cursor, etc.), or other LLM CLIs are welcome. See also [Watchdog Process](#watchdog-process) for OS-specific launcher requirements.
+**The numbers tell the story:**
+
+| Metric | Electron build | Tauri build (this fork) |
+|--------|---------------|------------------------|
+| macOS DMG size | ~100 MB | **8.3 MB** |
+| Runtime bundled | Chromium + Node.js | None (system WebView) |
+| Backend language | JavaScript (Node.js) | Rust (compiled native binary) |
+| Memory footprint (idle) | ~200–400 MB | ~40–80 MB |
+| Cold startup | ~2–4 s | ~0.5–1 s |
+
+Tauri uses the **operating system's existing WebView** (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux) instead of bundling Chromium. The React/TypeScript renderer is completely unchanged — only the backend main process is replaced.
+
+### Why Rust for the backend?
+
+The original Electron main process is written in TypeScript and runs inside Node.js. Replacing it with Rust gives:
+
+- **Memory safety without a garbage collector.** No GC pauses means the UI never freezes during PTY I/O or file-system polling.
+- **Typed, compiled IPC contracts.** Every command registered in `tauri::generate_handler![]` is a real Rust function — the compiler rejects mismatches before any binary is built. There are no magic IPC strings that fail silently at runtime.
+- **Native OS integration.** PTY (terminal), file system watchers, OS credential storage, and process spawning all happen through Rust crates that compile to native code, not Node.js wrappers around C++ bindings.
+- **Small, auditable attack surface.** Tauri's allow-list model means the renderer can only call commands you explicitly register. No arbitrary `eval` or `require` paths are available.
+
+### The philosophy in one sentence
+
+> Ship the smallest possible binary, keep the React UI untouched, and put correctness guarantees in the compiler instead of in runtime checks.
+
+---
+
+## Tauri Migration: What Changed
+
+### Architecture
+
+The Electron main process (`src/main/`) has been replaced by a Tauri Rust backend (`src-tauri/src/`). The renderer (`src/renderer/`) is identical. A transparent proxy-based shim (`src/preload/electron-shim.ts`) mounts `window.electronAPI` and routes all 262 methods to either real Tauri `invoke()` calls or Tauri event `listen()` subscriptions:
+
+```
+Renderer (React/TypeScript) — unchanged
+         ↓ window.electronAPI.*
+electron-shim.ts (Proxy + safeInvoke + listen)
+         ↓ invoke() / listen()
+Tauri Rust backend (src-tauri/src/)
+         ↓ spawn / emit / FS / OS APIs
+Python backend runners (apps/backend/)
+```
+
+### Rust backend (12,000+ lines across 23 source files)
+
+| Module | Commands | Notes |
+|--------|----------|-------|
+| `agent.rs` | 4 | Python subprocess spawn, streaming stdout → `agent:output` events |
+| `changelog.rs` | 11 | Git log, tag listing, AI changelog generation via `ai_analyzer_runner.py` |
+| `claude_code.rs` | 6 | Claude Code version detection and installation |
+| `debug.rs` | 6 | Log folder access, crash diagnostics |
+| `desktop.rs` | 4 | Multi-monitor desktop state tracking |
+| `diagnostics.rs` | 4 | Usage state, RDR status |
+| `file.rs` | 2 | File explorer read/list |
+| `git.rs` | 6 | Branch detection, status, init |
+| `github.rs` | 50+ | Full GitHub integration — PRs, issues, autofix, triage, batch ops |
+| `ideation.rs` | 10 | Ideation tab via `ideation_runner.py` with streaming events |
+| `insights.rs` | 10 | Chat sessions, streaming via `insights_runner.py` |
+| `profiles.rs` | 35+ | Claude + API profiles, usage monitoring, provider account CRUD |
+| `project.rs` | 10 | Project CRUD, env, kanban preferences |
+| `review.rs` | 6 | Inline code review with per-line comments + AI triage |
+| `roadmap.rs` | 7 | Roadmap generation via `roadmap_runner.py` |
+| `settings.rs` | 10 | App settings, CLI tool detection |
+| `shell.rs` | 6 | Directory picker, external links, terminal launch |
+| `task.rs` | 15+ | Task CRUD, archive, log streaming, `activity_record` |
+| `terminal.rs` | 10 | PTY via `portable-pty` crate, session management, display ordering |
+| `watcher.rs` | 2 | File-system watcher for auto-refresh |
+| `worktree.rs` | 12 | Diff, merge, PR creation, IDE integration |
+
+### New features added in this branch
+
+**Inline code review** — per-line comment system with AI triage:
+- `review_triage_runner.py` Python runner that analyzes code changes and prioritizes review comments
+- `InlineReview.tsx` component — shows diff hunks with comment threads
+- `unified-diff.ts` parser — converts raw git diffs to structured hunk objects
+- `review-comments-store.ts` — Zustand store for comment state
+- Full Rust API: `task_review_file_patch`, `task_review_comments_list/add/delete/update`, `task_finalize_review_triage/apply`
+
+**Activity log** — `activity_record` Rust command writes a JSONL audit trail to `<userData>/activity.jsonl` for every significant user action.
+
+**Provider account CRUD** — `provider_account_save/update/delete/set_order` with on-disk persistence in `<userData>/provider-accounts.json`.
+
+**Usage monitoring** — `usage_request_update`, `usage_request_all`, `usage_fetch_claude`, `profile_get_best_available`, priority ordering. Emits `profile:usage:updated`, `profile:all_usage_updated`, `profile:proactive_swap` events.
+
+**GitHub streaming** — `github_pr_review` now emits `github:pr:logs:updated` on every stdout line so the log panel refreshes in real time during a PR review.
+
+### Running the app
+
+```bash
+# Tauri (default — fast, small binary)
+cd apps/frontend && npm run dev
+
+# Electron (legacy, preserved for production parity)
+cd apps/frontend && npm run dev:electron
+
+# Production Tauri build
+cd apps/frontend && npm run build:tauri
+# Output: src-tauri/target/release/bundle/  (8.3 MB DMG on macOS aarch64)
+```
+
+### Tests
+
+```bash
+# Rust unit tests
+cd apps/frontend/src-tauri && cargo test
+
+# TypeScript / shim tests (3289 tests)
+cd apps/frontend && npm test -- --run
+
+# Type check
+cd apps/frontend && npx tsc --noEmit
+```
+
+### To get the Master LLM working through the MCP
+
+Copy the folders inside the `skills` folder in `.claude` to your personal `~/.claude/skills` folder.
+
+[Quick video demo of MCP + Tauri implementation](https://www.youtube.com/watch?v=NHAm-M8Lawc)
+
+---
 
 ## MCP Setup (Claude Code Integration)
 

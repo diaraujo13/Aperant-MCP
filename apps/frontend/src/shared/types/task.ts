@@ -253,6 +253,9 @@ export interface TaskMetadata {
   // Testing: Force recovery mode (yellow stuck outline) for testing RDR detection
   forceRecovery?: boolean;
 
+  // RDR: ISO timestamp when task entered recovery mode (yellow stuck outline)
+  stuckSince?: string;
+
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
   archivedInVersion?: string;  // Version in which task was archived (from changelog)
@@ -280,6 +283,7 @@ export interface Task {
   specsPath?: string;  // Full path to specs directory for this task
   exitReason?: TaskExitReason;  // Why task went to human_review (success, rate_limit_crash, error, auth_failure)
   rateLimitInfo?: TaskRateLimitInfo;  // Rate limit details if exitReason is 'rate_limit_crash'
+  qaSignoff?: string;  // qa_signoff.status from worktree/main plan (used by RDR)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -331,6 +335,8 @@ export interface ImplementationPlan {
   // Rate limit crash detection (Bug #5)
   exitReason?: TaskExitReason;  // Why task went to human_review
   rateLimitInfo?: TaskRateLimitInfo;  // Rate limit details if exitReason is 'rate_limit_crash'
+  executionPhase?: string;  // Persisted execution phase for restoration on app refresh
+  metadata?: TaskMetadata;  // Task metadata (used for forceRecovery flag and other recovery metadata)
 }
 
 export interface Phase {

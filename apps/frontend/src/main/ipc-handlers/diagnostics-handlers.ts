@@ -80,8 +80,9 @@ export function registerDiagnosticsHandlers(): void {
       // Get isClaudeCodeBusy result (uses title-based detection with generic pattern)
       let isClaudeCodeBusy = false;
       try {
-        const { isClaudeCodeBusy: checkBusy } = await import('../platform/windows/window-manager');
-        isClaudeCodeBusy = await checkBusy('Claude');
+        const { outputMonitor } = await import('../claude-code/output-monitor');
+        await outputMonitor.isAtPrompt();
+        isClaudeCodeBusy = outputMonitor.getCurrentState() === 'PROCESSING' || mcpBusy;
       } catch {
         // Platform-specific, may not be available
       }
@@ -125,8 +126,21 @@ export function registerDiagnosticsHandlers(): void {
   // Send a test RDR message for pipeline verification
   ipcMain.handle(IPC_CHANNELS.DIAG_SEND_TEST_RDR, async () => {
     try {
-      const { isClaudeCodeBusy } = await import('../platform/windows/window-manager');
-      const busy = await isClaudeCodeBusy('Claude');
+      const { outputMonitor } = await import('../claude-code/output-monitor');
+      let busy = false;
+
+      try {
+        const { mcpMonitor } = await import('../mcp-server');
+        busy = Boolean(mcpMonitor?.isBusy());
+      } catch {
+        // Fall back to transcript-based state only
+      }
+
+      if (!busy) {
+        await outputMonitor.isAtPrompt();
+        busy = outputMonitor.getCurrentState() === 'PROCESSING';
+      }
+
       return {
         success: true,
         data: {
