@@ -982,7 +982,10 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     onTerminalAuthCreated: (_cb: unknown) => () => {},
     onTerminalClaudeBusy: (_cb: unknown) => () => {},
     onTerminalClaudeExit: (_cb: unknown) => () => {},
-    onTerminalOnboardingComplete: (_cb: unknown) => () => {},
+    onTerminalOnboardingComplete: (cb: (info: unknown) => void) => {
+      const p = listen<unknown>('terminal:onboarding:complete', (e) => cb(e.payload));
+      return makeUnsubscribe(p);
+    },
     onTerminalPendingResume: (_cb: unknown) => () => {},
     onTerminalProfileChanged: (_cb: unknown) => () => {},
     onTerminalOAuthCodeNeeded: (_cb: unknown) => () => {},

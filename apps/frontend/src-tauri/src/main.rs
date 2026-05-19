@@ -235,6 +235,7 @@ fn main() {
             api::profiles::profile_set_priority_order,
             api::profiles::profile_retry_with,
             api::profiles::check_claude_auth,
+            api::profiles::mark_profile_authenticated,
             // Specs file watcher (Phase 6b — Kanban auto-refresh)
             api::watcher::task_watch_project,
             api::watcher::task_unwatch_project,

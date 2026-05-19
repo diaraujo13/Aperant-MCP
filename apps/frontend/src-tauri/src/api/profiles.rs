@@ -81,9 +81,61 @@ fn save_profiles(data: &Value) -> AppResult<()> {
     settings::write_settings_at_with_patch(&path, patch)
 }
 
+/// Expand a path that may start with `~` to an absolute path.
+fn expand_tilde(path: &str) -> std::path::PathBuf {
+    if path.starts_with('~') {
+        dirs::home_dir()
+            .map(|h| h.join(&path[2..]))
+            .unwrap_or_else(|| std::path::PathBuf::from(path))
+    } else {
+        std::path::PathBuf::from(path)
+    }
+}
+
+/// Check whether a config directory contains valid Claude credentials.
+/// Matches the patterns Claude CLI writes after /login.
+fn config_dir_has_credentials(config_dir: &str) -> bool {
+    let dir = expand_tilde(config_dir);
+    dir.join(".claude.json").exists()
+        || dir.join("credentials.json").exists()
+        || dir.join(".credentials.json").exists()
+}
+
+/// Read profiles and compute `isAuthenticated` dynamically for each entry.
+fn read_profiles_with_auth() -> Value {
+    let mut data = read_profiles();
+    let home = dirs::home_dir().unwrap_or_default();
+
+    if let Some(profiles) = data.get_mut("profiles").and_then(|v| v.as_array_mut()) {
+        for p in profiles.iter_mut() {
+            let has_token = p
+                .get("oauthToken")
+                .and_then(|v| v.as_str())
+                .map(|t| !t.is_empty())
+                .unwrap_or(false);
+
+            let config_dir_ok = p
+                .get("configDir")
+                .and_then(|v| v.as_str())
+                .map(config_dir_has_credentials)
+                .unwrap_or(false);
+
+            // Default profile: check ~/.claude/.claude.json
+            let default_ok = home.join(".claude").join(".claude.json").exists()
+                || home.join(".claude.json").exists();
+
+            let is_default = p.get("isDefault").and_then(|v| v.as_bool()).unwrap_or(false);
+            let authenticated = has_token || config_dir_ok || (is_default && default_ok);
+
+            p["isAuthenticated"] = json!(authenticated);
+        }
+    }
+    data
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_profiles_get() -> AppResult<IpcResult<Value>> {
-    let data = tokio::task::spawn_blocking(read_profiles)
+    let data = tokio::task::spawn_blocking(read_profiles_with_auth)
         .await
         .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))?;
     Ok(IpcResult::ok(data))
@@ -979,4 +1031,39 @@ pub async fn check_claude_auth(_project_id: String) -> AppResult<IpcResult<Value
     .unwrap_or(false);
 
     Ok(IpcResult::ok(json!({ "authenticated": authenticated })))
+}
+
+/// Called by the renderer when `terminal:oauth:token` fires successfully.
+/// Persists isAuthenticated=true and email to settings.json so the next
+/// getClaudeProfiles() call reflects the state immediately, even before the
+/// dynamic filesystem check in read_profiles_with_auth() can detect it.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn mark_profile_authenticated(
+    profile_id: String,
+    email: Option<String>,
+) -> AppResult<IpcResult<()>> {
+    tokio::task::spawn_blocking(move || -> AppResult<()> {
+        let mut data = read_profiles();
+        let profiles = data
+            .get_mut("profiles")
+            .and_then(|v| v.as_array_mut())
+            .ok_or_else(|| AppError::new("invalid_profiles", "profiles field missing"))?;
+
+        for p in profiles.iter_mut() {
+            if p.get("id").and_then(|v| v.as_str()) == Some(&profile_id) {
+                p["isAuthenticated"] = json!(true);
+                if let Some(ref e) = email {
+                    if !e.is_empty() {
+                        p["email"] = json!(e);
+                    }
+                }
+                break;
+            }
+        }
+        save_profiles(&data)
+    })
+    .await
+    .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))??;
+
+    Ok(IpcResult::ok(()))
 }

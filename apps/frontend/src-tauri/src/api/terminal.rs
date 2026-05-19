@@ -156,9 +156,36 @@ fn detect_oauth_success(buf: &str, terminal_id: &str, profile_id: &str) -> Optio
             "profileId": profile_id,
             "email": email,
             "success": true,
-            "needsOnboarding": true,
+            // needsOnboarding: false → AuthTerminal immediately shows success.
+            // We also emit terminal:onboarding:complete for the welcome-screen path,
+            // but this ensures auth completes even when the welcome screen never appears.
+            "needsOnboarding": false,
             "detectedAt": chrono::Utc::now().to_rfc3339(),
         }));
+    }
+    None
+}
+
+/// Detect Claude Code onboarding complete (welcome screen after login).
+/// Matches: "Welcome back André!", "Claude Code v2.x", "Claude Max/Pro/Team".
+fn detect_onboarding_complete(buf: &str, terminal_id: &str, profile_id: &str) -> Option<serde_json::Value> {
+    let patterns: &[&str] = &[
+        r"(?i)Welcome back\s+\w+",
+        r"(?i)Claude Code v\d+\.\d+",
+        r"(?i)Claude\s+(?:Max|Pro|Team|Enterprise)",
+    ];
+    for pat in patterns {
+        if let Ok(re) = regex_lite::Regex::new(pat) {
+            if re.is_match(buf) {
+                let email = extract_email_from_output(buf);
+                return Some(serde_json::json!({
+                    "terminalId": terminal_id,
+                    "profileId": profile_id,
+                    "email": email,
+                    "detectedAt": chrono::Utc::now().to_rfc3339(),
+                }));
+            }
+        }
     }
     None
 }
@@ -268,18 +295,25 @@ pub async fn terminal_create(
 
                     // OAuth detection for auth terminals
                     if let Some(ref profile_id) = auth_profile_id {
-                        if !oauth_done {
-                            // Strip ANSI escapes from chunk before appending
-                            let stripped = strip_ansi(&chunk);
-                            auth_buf.push_str(&stripped);
-                            // Keep buffer bounded
-                            if auth_buf.len() > 65536 {
-                                auth_buf = auth_buf[auth_buf.len() - 32768..].to_string();
-                            }
+                        // Strip ANSI escapes from chunk before appending
+                        let stripped = strip_ansi(&chunk);
+                        auth_buf.push_str(&stripped);
+                        // Keep buffer bounded
+                        if auth_buf.len() > 65536 {
+                            auth_buf = auth_buf[auth_buf.len() - 32768..].to_string();
+                        }
 
+                        if !oauth_done {
                             if let Some(event) = detect_oauth_success(&auth_buf, &id_for_reader, profile_id) {
                                 oauth_done = true;
                                 let _ = app_handle_for_reader.emit("terminal:oauth:token", event);
+                            }
+                        } else {
+                            // After OAuth, watch for onboarding complete (welcome screen)
+                            if let Some(event) = detect_onboarding_complete(&auth_buf, &id_for_reader, profile_id) {
+                                let _ = app_handle_for_reader.emit("terminal:onboarding:complete", event);
+                                // Clear buffer to avoid re-firing on buffered content
+                                auth_buf.clear();
                             }
                         }
                     }

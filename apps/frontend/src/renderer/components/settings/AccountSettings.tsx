@@ -410,7 +410,7 @@ export function AccountSettings({ settings, onSettingsChange, isOpen }: AccountS
   // ============================================
   // Claude Code (OAuth) handlers
   // ============================================
-  const loadClaudeProfiles = async () => {
+  const loadClaudeProfiles = useCallback(async () => {
     setIsLoadingProfiles(true);
     try {
       const result = await window.electronAPI.getClaudeProfiles();
@@ -436,7 +436,8 @@ export function AccountSettings({ settings, onSettingsChange, isOpen }: AccountS
     } finally {
       setIsLoadingProfiles(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddClaudeProfile = async () => {
     if (!newProfileName.trim()) return;

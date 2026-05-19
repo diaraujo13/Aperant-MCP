@@ -75,11 +75,11 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
 
   // Derived state: check if at least one profile is authenticated
   const hasAuthenticatedProfile = claudeProfiles.some(
-    (profile) => profile.oauthToken || (profile.isDefault && profile.configDir)
+    (profile) => profile.oauthToken || profile.isAuthenticated || (profile.isDefault && profile.configDir)
   );
 
-  // Reusable function to load Claude profiles
-  const loadClaudeProfiles = async () => {
+  // Reusable function to load Claude profiles — stable ref via useCallback
+  const loadClaudeProfiles = useCallback(async () => {
     setIsLoadingProfiles(true);
     setError(null);
     try {
@@ -95,9 +95,9 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
     } finally {
       setIsLoadingProfiles(false);
     }
-  };
+  }, []);
 
-  // Load Claude profiles on mount
+  // Load Claude profiles on mount only
   useEffect(() => {
     loadClaudeProfiles();
   }, [loadClaudeProfiles]);
