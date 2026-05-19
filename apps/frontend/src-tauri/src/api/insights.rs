@@ -17,7 +17,14 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
-pub type InsightsProcess = Arc<Mutex<Option<std::process::Child>>>;
+pub struct InsightsProcess(Arc<Mutex<Option<std::process::Child>>>);
+impl std::ops::Deref for InsightsProcess {
+    type Target = Arc<Mutex<Option<std::process::Child>>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Default for InsightsProcess {
+    fn default() -> Self { Self(Arc::new(Mutex::new(None))) }
+}
 
 const INSIGHTS_SUBDIR: &str = ".auto-claude/insights";
 

@@ -86,6 +86,83 @@ pub struct CreateResult {
     pub id: String,
 }
 
+/// Strip ANSI/VT escape sequences from a string.
+fn strip_ansi(s: &str) -> String {
+    // Handles CSI (\x1b[...m), OSC (\x1b]...BEL), and simple \x1b sequences.
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            match chars.peek() {
+                Some('[') => {
+                    chars.next();
+                    // consume until a letter (command byte)
+                    for ch in chars.by_ref() {
+                        if ch.is_ascii_alphabetic() { break; }
+                    }
+                }
+                Some(']') => {
+                    chars.next();
+                    // consume until BEL (\x07) or ST (\x1b\\)
+                    for ch in chars.by_ref() {
+                        if ch == '\x07' { break; }
+                        if ch == '\x1b' { chars.next(); break; }
+                    }
+                }
+                _ => { chars.next(); }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Extract email from Claude CLI output using the same patterns as the Electron app.
+fn extract_email_from_output(buf: &str) -> Option<String> {
+    let patterns: &[&str] = &[
+        r"(?i)(?:Authenticated as |Logged in as |email[:\s]+)([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})",
+        r"([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})'s\s*Organization",
+        r"(?i)Claude\s+(?:Max|Pro|Team|Enterprise)\s*[·•]\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})",
+        r"([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})'s",
+    ];
+    for pat in patterns {
+        if let Ok(re) = regex_lite::Regex::new(pat) {
+            if let Some(caps) = re.captures(buf) {
+                if let Some(m) = caps.get(1) {
+                    return Some(m.as_str().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Detect successful OAuth login in terminal output (auth terminals only).
+/// Returns a JSON payload ready to emit as `terminal:oauth:token`, or None.
+fn detect_oauth_success(buf: &str, terminal_id: &str, profile_id: &str) -> Option<serde_json::Value> {
+    // Primary: "Login successful", "Successfully logged in", "Logged in as user@..."
+    let login_re = regex_lite::Regex::new(
+        r"(?i)(?:Login successful|Successfully logged in|Logged in as\s+\S+@\S+)"
+    ).ok()?;
+
+    // Legacy: raw OAuth token in output
+    let token_re = regex_lite::Regex::new(r"(sk-ant-oat01-[A-Za-z0-9_\-]+)").ok()?;
+
+    if login_re.is_match(buf) || token_re.is_match(buf) {
+        let email = extract_email_from_output(buf);
+        return Some(serde_json::json!({
+            "terminalId": terminal_id,
+            "profileId": profile_id,
+            "email": email,
+            "success": true,
+            "needsOnboarding": true,
+            "detectedAt": chrono::Utc::now().to_rfc3339(),
+        }));
+    }
+    None
+}
+
 /// Picks a sensible shell when the renderer doesn't override it.
 /// macOS/Linux: $SHELL or /bin/bash. Windows: $COMSPEC or cmd.exe.
 fn default_shell() -> String {
@@ -159,12 +236,24 @@ pub async fn terminal_create(
         .try_clone_reader()
         .map_err(|e| AppError::new("clone_reader_failed", e.to_string()))?;
 
+    // Detect auth terminals: claude-login-{profileId}-{timestamp}
+    let auth_profile_id: Option<String> = {
+        let re = regex_lite::Regex::new(r"^claude-login-([a-z0-9-]+)-\d{13,}$").ok();
+        re.and_then(|r| r.captures(&id))
+            .and_then(|c| c.get(1))
+            .map(|m| m.as_str().to_string())
+    };
+
     // Spawn the read loop on a blocking thread — portable-pty's reader is
     // synchronous and would block tokio workers if run on the main runtime.
     let app_handle_for_reader = app_handle.clone();
     let id_for_reader = id.clone();
     let reader_task = tokio::task::spawn_blocking(move || {
         let mut buf = [0u8; 8192];
+        // Rolling output buffer for multi-chunk pattern detection (auth terminals only)
+        let mut auth_buf = String::new();
+        let mut oauth_done = false;
+
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break, // EOF (child exited)
@@ -175,6 +264,24 @@ pub async fn terminal_create(
                         json!({ "id": id_for_reader, "data": chunk }),
                     ) {
                         warn!(terminal = %id_for_reader, "emit failed: {e}");
+                    }
+
+                    // OAuth detection for auth terminals
+                    if let Some(ref profile_id) = auth_profile_id {
+                        if !oauth_done {
+                            // Strip ANSI escapes from chunk before appending
+                            let stripped = strip_ansi(&chunk);
+                            auth_buf.push_str(&stripped);
+                            // Keep buffer bounded
+                            if auth_buf.len() > 65536 {
+                                auth_buf = auth_buf[auth_buf.len() - 32768..].to_string();
+                            }
+
+                            if let Some(event) = detect_oauth_success(&auth_buf, &id_for_reader, profile_id) {
+                                oauth_done = true;
+                                let _ = app_handle_for_reader.emit("terminal:oauth:token", event);
+                            }
+                        }
                     }
                 }
                 Err(e) => {

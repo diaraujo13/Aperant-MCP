@@ -195,33 +195,106 @@ pub async fn claude_profile_switch(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_profile_initialize(_profile_id: String) -> AppResult<IpcResult<()>> {
-    Ok(IpcResult {
-        success: false,
-        data: None,
-        error: Some("profile_initialize_not_ported".to_string()),
-    })
+    // Initialization now happens automatically during the /login flow — no-op.
+    Ok(IpcResult::ok(()))
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn claude_profile_set_token(
-    _profile_id: String,
-    _token: String,
-    _email: Option<String>,
+    profile_id: String,
+    token: String,
+    email: Option<String>,
 ) -> AppResult<IpcResult<()>> {
-    Ok(IpcResult {
-        success: false,
-        data: None,
-        error: Some("profile_set_token_not_ported".to_string()),
+    tokio::task::spawn_blocking(move || -> AppResult<()> {
+        let mut data = read_profiles();
+        let profiles = data
+            .get_mut("profiles")
+            .and_then(|v| v.as_array_mut())
+            .ok_or_else(|| AppError::new("invalid_profiles", "profiles field missing"))?;
+
+        let found = profiles.iter_mut().any(|p| {
+            if p.get("id").and_then(|v| v.as_str()) == Some(&profile_id) {
+                p["oauthToken"] = json!(token);
+                p["isAuthenticated"] = json!(true);
+                if let Some(ref e) = email {
+                    p["email"] = json!(e);
+                }
+                true
+            } else {
+                false
+            }
+        });
+
+        if !found {
+            return Err(AppError::new("profile_not_found", format!("Profile {profile_id} not found")));
+        }
+        save_profiles(&data)
     })
+    .await
+    .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))??;
+
+    Ok(IpcResult::ok(()))
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn claude_profile_authenticate(_profile_id: String) -> AppResult<IpcResult<Value>> {
-    Ok(IpcResult {
-        success: false,
-        data: None,
-        error: Some("profile_authenticate_not_ported".to_string()),
+pub async fn claude_profile_authenticate(profile_id: String) -> AppResult<IpcResult<Value>> {
+    let result = tokio::task::spawn_blocking(move || -> AppResult<Value> {
+        // Resolve config directory from profile, defaulting to ~/.claude
+        let profiles_data = read_profiles();
+        let profiles = profiles_data.get("profiles").and_then(|v| v.as_array());
+
+        let config_dir_raw = profiles
+            .and_then(|ps| {
+                ps.iter().find(|p| p.get("id").and_then(|v| v.as_str()) == Some(&profile_id))
+            })
+            .and_then(|p| p.get("configDir").and_then(|v| v.as_str()))
+            .map(String::from)
+            .unwrap_or_else(|| "~/.claude".to_string());
+
+        // Expand leading ~ to home directory
+        let config_dir = if config_dir_raw.starts_with('~') {
+            dirs::home_dir()
+                .map(|h| h.join(&config_dir_raw[2..]))
+                .unwrap_or_else(|| std::path::PathBuf::from(&config_dir_raw))
+        } else {
+            std::path::PathBuf::from(&config_dir_raw)
+        };
+
+        std::fs::create_dir_all(&config_dir)
+            .map_err(|e| AppError::new("create_dir_failed", e.to_string()))?;
+
+        // Back up .claude.json if it contains OAuth credentials
+        let claude_json = config_dir.join(".claude.json");
+        let claude_json_bak = config_dir.join(".claude.json.bak");
+        if claude_json.exists() {
+            if let Ok(content) = std::fs::read_to_string(&claude_json) {
+                if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
+                    if parsed.get("oauthAccount").is_some() {
+                        let _ = std::fs::remove_file(&claude_json_bak);
+                        let _ = std::fs::rename(&claude_json, &claude_json_bak);
+                    }
+                }
+            }
+        }
+
+        let terminal_id = format!(
+            "claude-login-{}-{}",
+            profile_id,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        );
+
+        Ok(json!({
+            "terminalId": terminal_id,
+            "configDir": config_dir.to_string_lossy(),
+        }))
     })
+    .await
+    .map_err(|e| AppError::new("spawn_blocking_failed", e.to_string()))??;
+
+    Ok(IpcResult::ok(result))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -848,4 +921,62 @@ pub async fn profile_retry_with(
         json!({ "profileId": profile_id, "payload": payload }),
     );
     Ok(IpcResult::ok(()))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn check_claude_auth(_project_id: String) -> AppResult<IpcResult<Value>> {
+    // Check if claude binary is reachable
+    let cli_found = {
+        let paths = crate::api::claude_code::paths_to_probe();
+        paths.iter().any(|(p, _)| p.exists())
+    };
+
+    if !cli_found {
+        return Ok(IpcResult::ok(json!({
+            "authenticated": false,
+            "error": "Claude CLI not found. Please install it first."
+        })));
+    }
+
+    // Check if the active profile has valid credentials
+    let authenticated = tokio::task::spawn_blocking(|| -> bool {
+        let data = read_profiles();
+        let active_id = data.get("activeProfileId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let profiles = data.get("profiles").and_then(|v| v.as_array());
+
+        if let Some(ps) = profiles {
+            for p in ps {
+                let id = p.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                if id != active_id && !active_id.is_empty() {
+                    continue;
+                }
+                // Check token presence
+                let has_token = p.get("oauthToken").and_then(|v| v.as_str()).map(|t| !t.is_empty()).unwrap_or(false);
+                // Check credentials file
+                let config_dir_ok = p.get("configDir").and_then(|v| v.as_str()).map(|dir| {
+                    let dir_path = if dir.starts_with('~') {
+                        dirs::home_dir().map(|h| h.join(&dir[2..])).unwrap_or_default()
+                    } else {
+                        std::path::PathBuf::from(dir)
+                    };
+                    dir_path.join(".claude.json").exists() || dir_path.join("credentials.json").exists()
+                }).unwrap_or(false);
+                // Check default ~/.claude.json
+                let default_ok = dirs::home_dir()
+                    .map(|h| h.join(".claude").join(".claude.json").exists() || h.join(".claude.json").exists())
+                    .unwrap_or(false);
+                if has_token || config_dir_ok || default_ok {
+                    return true;
+                }
+            }
+        }
+        // If no profiles, check default location
+        dirs::home_dir()
+            .map(|h| h.join(".claude").join(".claude.json").exists() || h.join(".claude.json").exists())
+            .unwrap_or(false)
+    })
+    .await
+    .unwrap_or(false);
+
+    Ok(IpcResult::ok(json!({ "authenticated": authenticated })))
 }

@@ -803,10 +803,8 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     checkProjectVersion: (projectId: string) =>
       safeInvoke<unknown>('project_check_version', { projectId }),
     onProjectAutomationSettingsChanged: (_callback: unknown) => () => {},
-    checkClaudeAuth: (_projectId: string) =>
-      safeInvoke<unknown>('settings_get').then(r =>
-        ({ success: true, data: { status: 'authenticated', claudeAuth: r.data } })
-      ),
+    checkClaudeAuth: (projectId: string) =>
+      safeInvoke<{ authenticated: boolean }>('check_claude_auth', { projectId }),
     invokeClaudeSetup: (_projectId: string) =>
       safeInvoke<unknown>('settings_get'),
     // Context operations (require Python backend)
@@ -977,7 +975,10 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     },
     onTerminalClaudeSession: (_cb: unknown) => () => {},
     onTerminalRateLimit: (_cb: unknown) => () => {},
-    onTerminalOAuthToken: (_cb: unknown) => () => {},
+    onTerminalOAuthToken: (cb: (info: unknown) => void) => {
+      const p = listen<unknown>('terminal:oauth:token', (e) => cb(e.payload));
+      return makeUnsubscribe(p);
+    },
     onTerminalAuthCreated: (_cb: unknown) => () => {},
     onTerminalClaudeBusy: (_cb: unknown) => () => {},
     onTerminalClaudeExit: (_cb: unknown) => () => {},

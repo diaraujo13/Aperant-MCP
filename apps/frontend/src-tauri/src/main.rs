@@ -46,12 +46,12 @@ fn main() {
     // Clone before .manage() moves ownership — both setup task and Tauri state
     // manager share the same underlying map via Arc.
     let watchers_for_setup = Arc::clone(&watchers);
-    let roadmap_process: RoadmapProcess = Arc::new(std::sync::Mutex::new(None));
-    let roadmap_running: RoadmapRunning = Arc::new(std::sync::Mutex::new(false));
-    let ideation_process: IdeationProcess = Arc::new(std::sync::Mutex::new(None));
-    let ideation_running: IdeationRunning = Arc::new(std::sync::Mutex::new(false));
-    let insights_process: InsightsProcess = Arc::new(std::sync::Mutex::new(None));
-    let changelog_process: ChangelogProcess = Arc::new(std::sync::Mutex::new(None));
+    let roadmap_process = RoadmapProcess::default();
+    let roadmap_running = RoadmapRunning::default();
+    let ideation_process = IdeationProcess::default();
+    let ideation_running = IdeationRunning::default();
+    let insights_process = InsightsProcess::default();
+    let changelog_process = ChangelogProcess::default();
 
     tauri::Builder::default()
         .manage(desktop_state)
@@ -234,6 +234,7 @@ fn main() {
             api::profiles::profile_get_priority_order,
             api::profiles::profile_set_priority_order,
             api::profiles::profile_retry_with,
+            api::profiles::check_claude_auth,
             // Specs file watcher (Phase 6b — Kanban auto-refresh)
             api::watcher::task_watch_project,
             api::watcher::task_unwatch_project,

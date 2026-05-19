@@ -124,7 +124,7 @@ fn get_active_path_from_settings() -> Option<String> {
 /// All paths to check, in priority order: user-configured first, then candidates.
 /// This is the fix for the bug Codex flagged where `set_active_path` saved a path
 /// but `check_version` ignored it entirely.
-fn paths_to_probe() -> Vec<(PathBuf, &'static str)> {
+pub(crate) fn paths_to_probe() -> Vec<(PathBuf, &'static str)> {
     let mut out: Vec<(PathBuf, &'static str)> = Vec::new();
     if let Some(active) = get_active_path_from_settings() {
         out.push((PathBuf::from(active), "user-config"));
