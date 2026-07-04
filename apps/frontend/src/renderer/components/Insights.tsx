@@ -23,6 +23,7 @@ import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
+import { SpeakButton } from './ui/speak-button';
 import { cn } from '../lib/utils';
 import {
   useInsightsStore,
@@ -466,8 +467,9 @@ function MessageBubble({
         )}
       </div>
       <div className="flex-1 space-y-2">
-        <div className="text-sm font-medium text-foreground">
+        <div className="flex items-center gap-1 text-sm font-medium text-foreground">
           {isUser ? 'You' : 'Assistant'}
+          {!isUser && <SpeakButton text={message.content} className="h-6 w-6" />}
         </div>
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>

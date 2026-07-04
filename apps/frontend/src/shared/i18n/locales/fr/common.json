@@ -783,5 +783,9 @@
       "blockedTooltip": "Cette PR ne peut pas être fusionnée en raison de conditions bloquantes",
       "conflictTooltip": "Cette PR a des conflits de fusion qui doivent être résolus"
     }
+  },
+  "tts": {
+    "speak": "Lire à voix haute",
+    "stop": "Arrêter la lecture"
   }
 }
