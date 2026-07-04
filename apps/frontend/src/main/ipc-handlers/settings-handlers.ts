@@ -1,4 +1,5 @@
 import { ipcMain, dialog, app, shell, session } from 'electron';
+import os from 'os';
 import { existsSync, writeFileSync, mkdirSync, statSync, readFileSync } from 'fs';
 import { execFileSync } from 'node:child_process';
 import path from 'path';
@@ -20,6 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, DEFAULT_AGENT_PROFILES, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, sanitizeThinkingLevel, VALID_THINKING_LEVELS } from '../../shared/constants';
 import { setAppLanguage } from '../app-language';
+import { isMacOS } from '../platform';
 import type {
   AppSettings,
   IPCResult,
@@ -248,7 +250,7 @@ export function registerSettingsHandlers(
           providerAccounts: _providerAccounts,
           globalPriorityOrder: _globalPriorityOrder,
           disabledAutoSwitchAccountIds: _disabledAutoSwitchAccountIds,
-          _migratedProviderAccounts: _migratedProviderAccounts,
+          _migratedProviderAccounts,
           ...safeSettings
         } = settings;
         const newSettings = { ...currentSettings, ...safeSettings };
@@ -831,13 +833,68 @@ export function registerSettingsHandlers(
         }
 
         // Token exists if either source .env has it OR global settings has it
-        const hasToken = hasEnvToken || hasGlobalToken;
+        let hasToken = hasEnvToken || hasGlobalToken;
+
+        // Fallback: check if Claude Code CLI is authenticated via real credentials.
+        // Tauri/Electron features (ideation, insights, roadmap) can invoke `claude`
+        // directly and inherit its auth — no explicit .env token is needed.
+        // NOTE: `.claude.json` alone is NOT proof of login (general CLI state file,
+        // survives /logout); credentials live in `.credentials.json` (Linux/Windows)
+        // or the macOS Keychain. Mirrors is_cli_authenticated in the Tauri backend.
+        if (!hasToken) {
+          const home = os.homedir();
+          type ProfileEntry = { configDir?: string; isDefault?: boolean; oauthToken?: string };
+          const savedSettings2 = globalSettings as Record<string, unknown>;
+          const claudeProfilesData = savedSettings2?.claudeProfiles as { profiles?: ProfileEntry[] } | undefined;
+          const profiles: ProfileEntry[] = claudeProfilesData?.profiles ?? [];
+
+          const keychainHasCredentials = (): boolean => {
+            if (!isMacOS()) return false;
+            try {
+              execFileSync('security', ['find-generic-password', '-s', 'Claude Code-credentials'], {
+                stdio: 'ignore'
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          };
+
+          const defaultOk =
+            existsSync(path.join(home, '.claude', '.credentials.json')) || keychainHasCredentials();
+
+          // Expand "~" / "~/rest"; other "~x" forms are literal paths.
+          const expandTilde = (dir: string): string => {
+            if (dir === '~') return home;
+            if (dir.startsWith('~/')) return path.join(home, dir.slice(2));
+            return dir;
+          };
+
+          const cliAuthenticated =
+            profiles.some(p => {
+              if (p.oauthToken) return true;
+              if (p.configDir) {
+                const dir = expandTilde(p.configDir);
+                return (
+                  existsSync(path.join(dir, '.claude.json')) ||
+                  existsSync(path.join(dir, 'credentials.json')) ||
+                  existsSync(path.join(dir, '.credentials.json'))
+                );
+              }
+              return false;
+            }) || defaultOk;
+
+          if (cliAuthenticated) {
+            hasToken = true;
+          }
+        }
 
         return {
           success: true,
           data: {
             hasToken,
-            sourcePath
+            sourcePath,
+            cliAuthenticated: !hasEnvToken && !hasGlobalToken && hasToken
           }
         };
       } catch (error) {

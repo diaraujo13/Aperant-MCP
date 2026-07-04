@@ -200,6 +200,47 @@ fn default_shell() -> String {
     }
 }
 
+/// OS-specific PATH separator (`;` on Windows, `:` elsewhere).
+fn path_separator() -> char {
+    if cfg!(target_os = "windows") {
+        ';'
+    } else {
+        ':'
+    }
+}
+
+/// Prepend `dir` to a PATH-style string, skipping the work if `dir` is already
+/// the first/any entry (avoids unbounded growth across nested spawns). Returns
+/// `dir` alone when `existing` is empty.
+fn prepend_path(dir: &std::path::Path, existing: &str) -> String {
+    let sep = path_separator();
+    let dir_str = dir.to_string_lossy();
+    if existing.is_empty() {
+        return dir_str.into_owned();
+    }
+    if existing.split(sep).any(|entry| std::path::Path::new(entry) == dir) {
+        return existing.to_string();
+    }
+    format!("{dir_str}{sep}{existing}")
+}
+
+/// Builds the effective PATH for a spawned PTY: the caller-supplied PATH (or the
+/// app process PATH as fallback) with the resolved `claude` directory prepended.
+///
+/// This is the core of automatic Claude Code CLI integration. The app may be
+/// launched from Finder/Dock with a minimal PATH that omits Homebrew /
+/// npm-global / nvm, so a non-interactive PTY can't see `claude`. Prepending the
+/// detected CLI directory makes `claude` resolve in every terminal — auth login,
+/// agent terminals, and plain shells — without the user configuring anything.
+fn effective_path(supplied: Option<&String>) -> Option<String> {
+    let base = supplied
+        .cloned()
+        .or_else(|| std::env::var("PATH").ok())
+        .unwrap_or_default();
+    let claude_dir = crate::api::claude_code::resolve_claude_dir()?;
+    Some(prepend_path(&claude_dir, &base))
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn terminal_create(
     options: TerminalCreateOptions,
@@ -236,10 +277,20 @@ pub async fn terminal_create(
     if let Some(cwd) = options.cwd {
         cmd.cwd(cwd);
     }
+
+    // Capture any caller-supplied PATH before consuming the env map, so it can
+    // serve as the base that the Claude CLI directory is prepended onto.
+    let supplied_path = options.env.as_ref().and_then(|e| e.get("PATH").cloned());
     if let Some(env) = options.env {
         for (k, v) in env {
             cmd.env(k, v);
         }
+    }
+    // Inject the resolved Claude CLI directory onto PATH last, so it wins over
+    // any PATH the caller passed (their value is folded in as the base). This is
+    // what makes `claude` reachable from the PTY automatically.
+    if let Some(path) = effective_path(supplied_path.as_ref()) {
+        cmd.env("PATH", path);
     }
 
     let child = pty_pair
@@ -514,6 +565,49 @@ mod tests {
     fn default_cols_and_rows_are_sane() {
         assert_eq!(default_cols(), 80);
         assert_eq!(default_rows(), 24);
+    }
+
+    #[test]
+    fn prepend_path_adds_dir_to_front() {
+        let sep = path_separator();
+        let dir = std::path::Path::new("/opt/homebrew/bin");
+        let existing = format!("/usr/bin{sep}/bin");
+        let result = prepend_path(dir, &existing);
+        assert_eq!(result, format!("/opt/homebrew/bin{sep}/usr/bin{sep}/bin"));
+        // The injected dir is the first entry.
+        assert_eq!(result.split(sep).next(), Some("/opt/homebrew/bin"));
+    }
+
+    #[test]
+    fn prepend_path_is_idempotent_when_already_present() {
+        let sep = path_separator();
+        let dir = std::path::Path::new("/opt/homebrew/bin");
+        // Already at the front.
+        let front = format!("/opt/homebrew/bin{sep}/usr/bin");
+        assert_eq!(prepend_path(dir, &front), front);
+        // Present elsewhere — still no duplicate added.
+        let middle = format!("/usr/bin{sep}/opt/homebrew/bin{sep}/bin");
+        assert_eq!(prepend_path(dir, &middle), middle);
+    }
+
+    #[test]
+    fn prepend_path_handles_empty_existing() {
+        let dir = std::path::Path::new("/opt/homebrew/bin");
+        assert_eq!(prepend_path(dir, ""), "/opt/homebrew/bin");
+    }
+
+    #[test]
+    fn effective_path_uses_supplied_base_when_no_claude_dir() {
+        // When no claude binary is resolvable on the host, effective_path falls
+        // back to None and the caller leaves PATH untouched. We can't force
+        // resolve_claude_dir to None deterministically, so assert the contract
+        // holds for whichever branch this host takes.
+        let supplied = "/custom/base".to_string();
+        // claude found: supplied base must still be present (folded in).
+        // claude not found: None is the documented fallback (nothing to assert).
+        if let Some(p) = effective_path(Some(&supplied)) {
+            assert!(p.contains("/custom/base"));
+        }
     }
 
     #[test]

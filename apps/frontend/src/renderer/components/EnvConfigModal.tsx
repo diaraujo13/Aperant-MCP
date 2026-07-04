@@ -66,6 +66,8 @@ export function EnvConfigModal({
     oauthToken?: string;
     email?: string;
     isDefault: boolean;
+    isAuthenticated?: boolean;
+    configDir?: string;
   }>>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
@@ -100,10 +102,13 @@ export function EnvConfigModal({
           setError(tokenResult.error || 'Failed to check token status');
         }
 
-        // Handle Claude profiles
+        // Handle Claude profiles — include any profile that is authenticated
+        // (via stored oauthToken OR via CLI credentials on disk, detected server-side
+        // as isAuthenticated=true). Tauri Rust commands use `claude` directly, so
+        // CLI-authenticated profiles work without an explicit stored token.
         if (profilesResult.success && profilesResult.data) {
           const authenticatedProfiles = profilesResult.data.profiles.filter(
-            (p: ClaudeProfile) => p.oauthToken || (p.isDefault && p.configDir)
+            (p: ClaudeProfile) => p.oauthToken || p.isAuthenticated || (p.isDefault && p.configDir)
           );
           setClaudeProfiles(authenticatedProfiles);
 
@@ -153,30 +158,44 @@ export function EnvConfigModal({
     setError(null);
 
     try {
-      // Get the selected profile's token
       const profile = claudeProfiles.find(p => p.id === selectedProfileId);
-      if (!profile?.oauthToken) {
-        setError('Selected profile does not have a valid token');
-        setIsSaving(false);
-        return;
-      }
 
-      // Save the token to auto-claude .env
-      const result = await window.electronAPI.updateSourceEnv({
-        claudeOAuthToken: profile.oauthToken
-      });
+      if (profile?.oauthToken) {
+        // Profile has an explicit stored token — save it to the backend .env
+        const result = await window.electronAPI.updateSourceEnv({
+          claudeOAuthToken: profile.oauthToken
+        });
 
-      if (result.success) {
-        setSuccess(true);
-        setHasExistingToken(true);
-
-        // Notify parent
-        setTimeout(() => {
-          onConfigured?.();
-          onOpenChange(false);
-        }, 1500);
+        if (result.success) {
+          setSuccess(true);
+          setHasExistingToken(true);
+          setTimeout(() => {
+            onConfigured?.();
+            onOpenChange(false);
+          }, 1500);
+        } else {
+          setError(result.error || 'Failed to save token');
+        }
+      } else if (profile?.isAuthenticated || (profile?.isDefault && profile?.configDir)) {
+        // Profile looks CLI-authenticated. Confirm with the backend before
+        // declaring success — checkSourceToken verifies actual credentials
+        // (.credentials.json / macOS Keychain), not just the profile's shape.
+        // Tauri Rust commands (ideation, insights, roadmap) invoke `claude`
+        // directly, so CLI-level authentication is sufficient — no .env token
+        // needed.
+        const check = await window.electronAPI.checkSourceToken();
+        if (check.success && check.data?.hasToken) {
+          setSuccess(true);
+          setHasExistingToken(true);
+          setTimeout(() => {
+            onConfigured?.();
+            onOpenChange(false);
+          }, 1500);
+        } else {
+          setError('Claude Code CLI is not authenticated. Run `claude /login` or use browser authentication below.');
+        }
       } else {
-        setError(result.error || 'Failed to save token');
+        setError('Selected profile does not have a valid token');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

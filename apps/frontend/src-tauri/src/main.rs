@@ -101,6 +101,7 @@ fn main() {
             api::claude_code::claude_code_install,
             api::claude_code::claude_code_install_version,
             api::claude_code::claude_code_set_active_path,
+            api::claude_code::claude_code_resolve_path,
             // Project domain (Phase 2 round 3)
             api::project::project_list,
             api::project::project_add,

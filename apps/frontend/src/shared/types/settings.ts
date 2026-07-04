@@ -386,4 +386,6 @@ export interface SourceEnvCheckResult {
   hasToken: boolean;
   sourcePath?: string;
   error?: string;
+  /** True when auth comes from Claude CLI credentials rather than an explicit .env token. */
+  cliAuthenticated?: boolean;
 }

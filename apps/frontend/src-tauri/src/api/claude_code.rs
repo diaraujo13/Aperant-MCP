@@ -85,6 +85,10 @@ fn candidate_paths() -> Vec<(PathBuf, &'static str)> {
 
     if cfg!(target_os = "macos") {
         paths.extend([
+            // Native installer (Claude Code 2.x default — replaced npm-global).
+            // `~/.local/bin/claude` symlinks into `~/.local/share/claude/versions/`.
+            (home.join(".local/bin/claude"), "native"),
+            (home.join(".claude/local/claude"), "native"),
             (PathBuf::from("/opt/homebrew/bin/claude"), "homebrew"),
             (PathBuf::from("/usr/local/bin/claude"), "system-path"),
             (home.join(".npm-global/bin/claude"), "system-path"),
@@ -95,11 +99,16 @@ fn candidate_paths() -> Vec<(PathBuf, &'static str)> {
         ]);
     } else if cfg!(target_os = "linux") {
         paths.extend([
+            // Native installer (Claude Code 2.x default — replaced npm-global).
+            (home.join(".local/bin/claude"), "native"),
+            (home.join(".claude/local/claude"), "native"),
             (PathBuf::from("/usr/local/bin/claude"), "system-path"),
             (PathBuf::from("/usr/bin/claude"), "system-path"),
             (home.join(".npm-global/bin/claude"), "system-path"),
         ]);
     } else if cfg!(target_os = "windows") {
+        // Native installer (Claude Code 2.x default): %USERPROFILE%\.local\bin\claude.exe
+        paths.push((home.join(".local").join("bin").join("claude.exe"), "native"));
         if let Ok(appdata) = std::env::var("APPDATA") {
             paths.push((
                 PathBuf::from(appdata).join("npm").join("claude.cmd"),
@@ -131,6 +140,46 @@ pub(crate) fn paths_to_probe() -> Vec<(PathBuf, &'static str)> {
     }
     out.extend(candidate_paths());
     out
+}
+
+/// Resolve the absolute path of the `claude` binary, if one exists at any
+/// probed location (user-config first, then per-OS candidates). Version
+/// validation lives in `claude_code_check_version`.
+///
+/// Used to make the CLI reachable from spawned PTYs. A Tauri app launched from
+/// Finder/Dock inherits a minimal PATH (`/usr/bin:/bin:...`), so `claude`
+/// installed via Homebrew / npm-global / nvm is invisible to a non-interactive
+/// shell — the root cause of `claude /login` failing in the auth terminal.
+pub(crate) fn resolve_claude_bin() -> Option<PathBuf> {
+    first_claude_binary(paths_to_probe().into_iter().map(|(path, _src)| path))
+}
+
+/// True when `path` is a regular file (symlinks followed) named `claude`,
+/// `claude.cmd`, `claude.exe`, etc. Bare `exists()` is not enough: the parent
+/// directory of the winning path is prepended to every spawned PTY's PATH, so
+/// a user-configured claudePath pointing at a directory (whose PARENT would
+/// then shadow system binaries — `/tmp` would promote `/`) or at an unrelated
+/// file must not qualify.
+fn is_claude_binary(path: &std::path::Path) -> bool {
+    path.is_file()
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n == "claude" || n.starts_with("claude."))
+            .unwrap_or(false)
+}
+
+/// Pure helper: first path in `paths` that passes [`is_claude_binary`].
+/// Extracted so the selection order can be unit-tested without touching the
+/// real filesystem layout the candidate paths assume.
+fn first_claude_binary(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    paths.into_iter().find(|path| is_claude_binary(path))
+}
+
+/// Directory containing the resolved `claude` binary, suitable for prepending
+/// to a child process's `PATH`. Returns `None` when no binary is found.
+pub(crate) fn resolve_claude_dir() -> Option<PathBuf> {
+    resolve_claude_bin().and_then(|bin| bin.parent().map(|dir| dir.to_path_buf()))
 }
 
 /// Extracts a semver-shaped version from a free-form `--version` output line.
@@ -319,6 +368,33 @@ pub async fn claude_code_set_active_path(
     Ok(IpcResult::ok(SetActivePathResult { path: cli_path }))
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedClaudePath {
+    pub path: Option<String>,
+    pub source: Option<String>,
+}
+
+/// Network-free resolution of the active `claude` binary path. Unlike
+/// `claude_code_check_version`, this does NOT call `npm view` (which can block
+/// up to 30s) — it only probes local candidate paths. The auth terminal uses it
+/// to pre-fill an absolute-path login command without stalling on the network.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn claude_code_resolve_path() -> AppResult<IpcResult<ResolvedClaudePath>> {
+    for (path, src) in paths_to_probe() {
+        if is_claude_binary(&path) {
+            return Ok(IpcResult::ok(ResolvedClaudePath {
+                path: Some(path.to_string_lossy().to_string()),
+                source: Some(src.to_string()),
+            }));
+        }
+    }
+    Ok(IpcResult::ok(ResolvedClaudePath {
+        path: None,
+        source: None,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -420,6 +496,54 @@ mod tests {
     }
 
     #[test]
+    fn first_claude_binary_picks_first_present_path_in_order() {
+        let dir = std::env::temp_dir().join(format!("aperant_claude_probe_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("missing-claude");
+        let present = dir.join("claude");
+        std::fs::write(&present, b"#!/bin/sh\n").unwrap();
+
+        // Earlier-but-missing entries are skipped; first existing wins.
+        let found = first_claude_binary(vec![missing.clone(), present.clone()]);
+        assert_eq!(found.as_deref(), Some(present.as_path()));
+
+        // resolve_claude_dir-style derivation: parent of the found binary.
+        assert_eq!(found.and_then(|b| b.parent().map(|p| p.to_path_buf())), Some(dir.clone()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn first_claude_binary_returns_none_when_nothing_exists() {
+        let nope = std::env::temp_dir().join("aperant_definitely_absent_claude_xyz");
+        assert_eq!(first_claude_binary(vec![nope]), None);
+    }
+
+    #[test]
+    fn first_claude_binary_rejects_directories_and_unrelated_files() {
+        // Regression: a user-configured claudePath pointing at a DIRECTORY used
+        // to pass bare exists(), promoting its PARENT onto every PTY's PATH
+        // (claudePath=/tmp → PATH gets "/"). Directories and files not named
+        // claude* must not qualify.
+        let dir =
+            std::env::temp_dir().join(format!("aperant_claude_reject_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let subdir = dir.join("claude");
+        std::fs::create_dir_all(&subdir).unwrap();
+        let unrelated = dir.join("git");
+        std::fs::write(&unrelated, b"#!/bin/sh\n").unwrap();
+
+        assert_eq!(first_claude_binary(vec![subdir, unrelated]), None);
+
+        // claude.exe / claude.cmd style names DO qualify.
+        let exe = dir.join("claude.exe");
+        std::fs::write(&exe, b"MZ").unwrap();
+        assert_eq!(first_claude_binary(vec![exe.clone()]).as_deref(), Some(exe.as_path()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn candidate_paths_per_os_returns_some_entries() {
         let paths = candidate_paths();
         if cfg!(any(
@@ -428,6 +552,31 @@ mod tests {
             target_os = "windows"
         )) {
             assert!(!paths.is_empty());
+        }
+    }
+
+    /// Regression: the Claude Code 2.x native installer (`~/.local/bin/claude`,
+    /// symlinked into `~/.local/share/claude/versions/`) replaced npm-global as
+    /// the default. Omitting it made every install via the official installer
+    /// read as "not installed" and also starved the PTY PATH injection, so the
+    /// auth terminal's `claude /login` couldn't resolve. Lock the path in.
+    #[test]
+    fn candidate_paths_include_native_installer_location() {
+        let paths = candidate_paths();
+        let bin_name = if cfg!(target_os = "windows") {
+            "claude.exe"
+        } else {
+            "claude"
+        };
+        let has_native = paths.iter().any(|(p, src)| {
+            *src == "native"
+                && p.ends_with(std::path::Path::new(".local").join("bin").join(bin_name))
+        });
+        if cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows")) {
+            assert!(
+                has_native,
+                "candidate_paths() must probe the native installer ~/.local/bin/{bin_name}; got {paths:?}"
+            );
         }
     }
 }

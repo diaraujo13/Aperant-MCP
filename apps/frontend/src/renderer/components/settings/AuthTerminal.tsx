@@ -167,7 +167,23 @@ export function AuthTerminal({
         xterm.writeln('\x1b[1;36m╚════════════════════════════════════════════════════════════╝\x1b[0m');
         xterm.writeln('');
 
-        // Pre-fill the terminal with 'claude /login' command
+        // Resolve the absolute `claude` path as a fallback. An app launched from
+        // Finder/Dock inherits a minimal PATH, so a bare `claude` may not resolve
+        // in the PTY. The Rust terminal layer also prepends the CLI dir onto PATH;
+        // using the absolute path here is defense-in-depth so login works either way.
+        let claudeCmd = 'claude';
+        try {
+          const resolved = await window.electronAPI.resolveClaudeCodePath?.();
+          const resolvedPath = resolved?.success ? resolved.data?.path : null;
+          if (resolvedPath) {
+            // Quote to survive spaces in the path (e.g. Windows "Program Files").
+            claudeCmd = `"${resolvedPath}"`;
+          }
+        } catch {
+          // Ignore — fall back to bare `claude`; PATH injection should cover it.
+        }
+
+        // Pre-fill the terminal with the `<claude> /login` command
         // Wait a moment for the shell prompt to be ready, then send the command
         // (without carriage return so user must press Enter)
         // Guard: only send once per component lifecycle
@@ -177,8 +193,8 @@ export function AuthTerminal({
             // Double-check guard in case of race conditions
             if (!loginSentRef.current) {
               loginSentRef.current = true;
-              debugLog('Sending /login pre-fill NOW', { terminalId });
-              window.electronAPI.sendTerminalInput(terminalId, 'claude /login');
+              debugLog('Sending /login pre-fill NOW', { terminalId, claudeCmd });
+              window.electronAPI.sendTerminalInput(terminalId, `${claudeCmd} /login`);
             } else {
               debugLog('SKIPPED /login pre-fill (already sent)', { terminalId });
             }

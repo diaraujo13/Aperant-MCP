@@ -171,6 +171,13 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<unknown>('claude_code_get_installations'),
     setClaudeCodeActivePath: (cliPath: string) =>
       safeInvoke<unknown>('claude_code_set_active_path', { cliPath }),
+    // Fast, network-free lookup of the local `claude` binary path. Used by the
+    // auth terminal to build an absolute-path login command without blocking on
+    // the slow `npm view` that checkClaudeCodeVersion performs.
+    resolveClaudeCodePath: () =>
+      safeInvoke<{ path: string | null; source: string | null }>(
+        'claude_code_resolve_path',
+      ),
   };
 
   // Project domain (Phase 2 round 3) — projects.json CRUD, tab state, kanban prefs.
