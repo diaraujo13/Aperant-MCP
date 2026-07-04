@@ -48,4 +48,11 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  // Tauri 2.x: @tauri-apps/api uses the Tauri IPC bridge at runtime.
+  // Pre-bundling it with esbuild transforms the IPC call sites in ways that
+  // break communication with the Rust backend inside WKWebView.
+  // Exclude it so Vite serves the original ESM package unchanged.
+  optimizeDeps: {
+    exclude: ['@tauri-apps/api'],
+  },
 });

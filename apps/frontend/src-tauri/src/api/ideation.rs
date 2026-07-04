@@ -16,8 +16,23 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
-pub type IdeationProcess = Arc<Mutex<Option<std::process::Child>>>;
-pub type IdeationRunning = Arc<Mutex<bool>>;
+pub struct IdeationProcess(Arc<Mutex<Option<std::process::Child>>>);
+impl std::ops::Deref for IdeationProcess {
+    type Target = Arc<Mutex<Option<std::process::Child>>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Default for IdeationProcess {
+    fn default() -> Self { Self(Arc::new(Mutex::new(None))) }
+}
+
+pub struct IdeationRunning(Arc<Mutex<bool>>);
+impl std::ops::Deref for IdeationRunning {
+    type Target = Arc<Mutex<bool>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Default for IdeationRunning {
+    fn default() -> Self { Self(Arc::new(Mutex::new(false))) }
+}
 
 const AUTO_CLAUDE_SUBDIR: &str = ".auto-claude";
 const IDEATION_FILENAME: &str = "ideation.json";

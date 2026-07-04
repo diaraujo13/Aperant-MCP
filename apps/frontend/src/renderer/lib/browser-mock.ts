@@ -322,6 +322,10 @@ const browserMockAPI = {
       }
     }
   }),
+  resolveClaudeCodePath: async () => ({
+    success: true,
+    data: { path: '/usr/local/bin/claude', source: 'system-path' }
+  }),
   installClaudeCode: async () => ({
     success: true,
     data: { command: 'npm install -g @anthropic-ai/claude-code' }

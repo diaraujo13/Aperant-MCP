@@ -78,7 +78,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "auto-claude-tauri"
-version = "0.2.0-0"
+version = "0.2.2-0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -86,6 +86,7 @@ dependencies = [
  "fs2",
  "notify",
  "portable-pty",
+ "regex-lite",
  "reqwest 0.12.28",
  "semver",
  "serde",
@@ -2871,6 +2872,12 @@ dependencies = [
  "memchr",
  "regex-syntax",
 ]
+
+[[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
 
 [[package]]
 name = "regex-syntax"

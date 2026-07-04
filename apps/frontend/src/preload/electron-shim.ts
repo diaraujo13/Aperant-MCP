@@ -171,6 +171,13 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
       safeInvoke<unknown>('claude_code_get_installations'),
     setClaudeCodeActivePath: (cliPath: string) =>
       safeInvoke<unknown>('claude_code_set_active_path', { cliPath }),
+    // Fast, network-free lookup of the local `claude` binary path. Used by the
+    // auth terminal to build an absolute-path login command without blocking on
+    // the slow `npm view` that checkClaudeCodeVersion performs.
+    resolveClaudeCodePath: () =>
+      safeInvoke<{ path: string | null; source: string | null }>(
+        'claude_code_resolve_path',
+      ),
   };
 
   // Project domain (Phase 2 round 3) — projects.json CRUD, tab state, kanban prefs.
@@ -803,10 +810,8 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     checkProjectVersion: (projectId: string) =>
       safeInvoke<unknown>('project_check_version', { projectId }),
     onProjectAutomationSettingsChanged: (_callback: unknown) => () => {},
-    checkClaudeAuth: (_projectId: string) =>
-      safeInvoke<unknown>('settings_get').then(r =>
-        ({ success: true, data: { status: 'authenticated', claudeAuth: r.data } })
-      ),
+    checkClaudeAuth: (projectId: string) =>
+      safeInvoke<{ authenticated: boolean }>('check_claude_auth', { projectId }),
     invokeClaudeSetup: (_projectId: string) =>
       safeInvoke<unknown>('settings_get'),
     // Context operations (require Python backend)
@@ -977,11 +982,17 @@ if (isTauri() && typeof window.electronAPI === 'undefined') {
     },
     onTerminalClaudeSession: (_cb: unknown) => () => {},
     onTerminalRateLimit: (_cb: unknown) => () => {},
-    onTerminalOAuthToken: (_cb: unknown) => () => {},
+    onTerminalOAuthToken: (cb: (info: unknown) => void) => {
+      const p = listen<unknown>('terminal:oauth:token', (e) => cb(e.payload));
+      return makeUnsubscribe(p);
+    },
     onTerminalAuthCreated: (_cb: unknown) => () => {},
     onTerminalClaudeBusy: (_cb: unknown) => () => {},
     onTerminalClaudeExit: (_cb: unknown) => () => {},
-    onTerminalOnboardingComplete: (_cb: unknown) => () => {},
+    onTerminalOnboardingComplete: (cb: (info: unknown) => void) => {
+      const p = listen<unknown>('terminal:onboarding:complete', (e) => cb(e.payload));
+      return makeUnsubscribe(p);
+    },
     onTerminalPendingResume: (_cb: unknown) => () => {},
     onTerminalProfileChanged: (_cb: unknown) => () => {},
     onTerminalOAuthCodeNeeded: (_cb: unknown) => () => {},

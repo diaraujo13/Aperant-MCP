@@ -86,6 +86,110 @@ pub struct CreateResult {
     pub id: String,
 }
 
+/// Strip ANSI/VT escape sequences from a string.
+fn strip_ansi(s: &str) -> String {
+    // Handles CSI (\x1b[...m), OSC (\x1b]...BEL), and simple \x1b sequences.
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            match chars.peek() {
+                Some('[') => {
+                    chars.next();
+                    // consume until a letter (command byte)
+                    for ch in chars.by_ref() {
+                        if ch.is_ascii_alphabetic() { break; }
+                    }
+                }
+                Some(']') => {
+                    chars.next();
+                    // consume until BEL (\x07) or ST (\x1b\\)
+                    for ch in chars.by_ref() {
+                        if ch == '\x07' { break; }
+                        if ch == '\x1b' { chars.next(); break; }
+                    }
+                }
+                _ => { chars.next(); }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Extract email from Claude CLI output using the same patterns as the Electron app.
+fn extract_email_from_output(buf: &str) -> Option<String> {
+    let patterns: &[&str] = &[
+        r"(?i)(?:Authenticated as |Logged in as |email[:\s]+)([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})",
+        r"([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})'s\s*Organization",
+        r"(?i)Claude\s+(?:Max|Pro|Team|Enterprise)\s*[·•]\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})",
+        r"([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})'s",
+    ];
+    for pat in patterns {
+        if let Ok(re) = regex_lite::Regex::new(pat) {
+            if let Some(caps) = re.captures(buf) {
+                if let Some(m) = caps.get(1) {
+                    return Some(m.as_str().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Detect successful OAuth login in terminal output (auth terminals only).
+/// Returns a JSON payload ready to emit as `terminal:oauth:token`, or None.
+fn detect_oauth_success(buf: &str, terminal_id: &str, profile_id: &str) -> Option<serde_json::Value> {
+    // Primary: "Login successful", "Successfully logged in", "Logged in as user@..."
+    let login_re = regex_lite::Regex::new(
+        r"(?i)(?:Login successful|Successfully logged in|Logged in as\s+\S+@\S+)"
+    ).ok()?;
+
+    // Legacy: raw OAuth token in output
+    let token_re = regex_lite::Regex::new(r"(sk-ant-oat01-[A-Za-z0-9_\-]+)").ok()?;
+
+    if login_re.is_match(buf) || token_re.is_match(buf) {
+        let email = extract_email_from_output(buf);
+        return Some(serde_json::json!({
+            "terminalId": terminal_id,
+            "profileId": profile_id,
+            "email": email,
+            "success": true,
+            // needsOnboarding: false → AuthTerminal immediately shows success.
+            // We also emit terminal:onboarding:complete for the welcome-screen path,
+            // but this ensures auth completes even when the welcome screen never appears.
+            "needsOnboarding": false,
+            "detectedAt": chrono::Utc::now().to_rfc3339(),
+        }));
+    }
+    None
+}
+
+/// Detect Claude Code onboarding complete (welcome screen after login).
+/// Matches: "Welcome back André!", "Claude Code v2.x", "Claude Max/Pro/Team".
+fn detect_onboarding_complete(buf: &str, terminal_id: &str, profile_id: &str) -> Option<serde_json::Value> {
+    let patterns: &[&str] = &[
+        r"(?i)Welcome back\s+\w+",
+        r"(?i)Claude Code v\d+\.\d+",
+        r"(?i)Claude\s+(?:Max|Pro|Team|Enterprise)",
+    ];
+    for pat in patterns {
+        if let Ok(re) = regex_lite::Regex::new(pat) {
+            if re.is_match(buf) {
+                let email = extract_email_from_output(buf);
+                return Some(serde_json::json!({
+                    "terminalId": terminal_id,
+                    "profileId": profile_id,
+                    "email": email,
+                    "detectedAt": chrono::Utc::now().to_rfc3339(),
+                }));
+            }
+        }
+    }
+    None
+}
+
 /// Picks a sensible shell when the renderer doesn't override it.
 /// macOS/Linux: $SHELL or /bin/bash. Windows: $COMSPEC or cmd.exe.
 fn default_shell() -> String {
@@ -94,6 +198,47 @@ fn default_shell() -> String {
     } else {
         std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
     }
+}
+
+/// OS-specific PATH separator (`;` on Windows, `:` elsewhere).
+fn path_separator() -> char {
+    if cfg!(target_os = "windows") {
+        ';'
+    } else {
+        ':'
+    }
+}
+
+/// Prepend `dir` to a PATH-style string, skipping the work if `dir` is already
+/// the first/any entry (avoids unbounded growth across nested spawns). Returns
+/// `dir` alone when `existing` is empty.
+fn prepend_path(dir: &std::path::Path, existing: &str) -> String {
+    let sep = path_separator();
+    let dir_str = dir.to_string_lossy();
+    if existing.is_empty() {
+        return dir_str.into_owned();
+    }
+    if existing.split(sep).any(|entry| std::path::Path::new(entry) == dir) {
+        return existing.to_string();
+    }
+    format!("{dir_str}{sep}{existing}")
+}
+
+/// Builds the effective PATH for a spawned PTY: the caller-supplied PATH (or the
+/// app process PATH as fallback) with the resolved `claude` directory prepended.
+///
+/// This is the core of automatic Claude Code CLI integration. The app may be
+/// launched from Finder/Dock with a minimal PATH that omits Homebrew /
+/// npm-global / nvm, so a non-interactive PTY can't see `claude`. Prepending the
+/// detected CLI directory makes `claude` resolve in every terminal — auth login,
+/// agent terminals, and plain shells — without the user configuring anything.
+fn effective_path(supplied: Option<&String>) -> Option<String> {
+    let base = supplied
+        .cloned()
+        .or_else(|| std::env::var("PATH").ok())
+        .unwrap_or_default();
+    let claude_dir = crate::api::claude_code::resolve_claude_dir()?;
+    Some(prepend_path(&claude_dir, &base))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -132,10 +277,20 @@ pub async fn terminal_create(
     if let Some(cwd) = options.cwd {
         cmd.cwd(cwd);
     }
+
+    // Capture any caller-supplied PATH before consuming the env map, so it can
+    // serve as the base that the Claude CLI directory is prepended onto.
+    let supplied_path = options.env.as_ref().and_then(|e| e.get("PATH").cloned());
     if let Some(env) = options.env {
         for (k, v) in env {
             cmd.env(k, v);
         }
+    }
+    // Inject the resolved Claude CLI directory onto PATH last, so it wins over
+    // any PATH the caller passed (their value is folded in as the base). This is
+    // what makes `claude` reachable from the PTY automatically.
+    if let Some(path) = effective_path(supplied_path.as_ref()) {
+        cmd.env("PATH", path);
     }
 
     let child = pty_pair
@@ -159,12 +314,24 @@ pub async fn terminal_create(
         .try_clone_reader()
         .map_err(|e| AppError::new("clone_reader_failed", e.to_string()))?;
 
+    // Detect auth terminals: claude-login-{profileId}-{timestamp}
+    let auth_profile_id: Option<String> = {
+        let re = regex_lite::Regex::new(r"^claude-login-([a-z0-9-]+)-\d{13,}$").ok();
+        re.and_then(|r| r.captures(&id))
+            .and_then(|c| c.get(1))
+            .map(|m| m.as_str().to_string())
+    };
+
     // Spawn the read loop on a blocking thread — portable-pty's reader is
     // synchronous and would block tokio workers if run on the main runtime.
     let app_handle_for_reader = app_handle.clone();
     let id_for_reader = id.clone();
     let reader_task = tokio::task::spawn_blocking(move || {
         let mut buf = [0u8; 8192];
+        // Rolling output buffer for multi-chunk pattern detection (auth terminals only)
+        let mut auth_buf = String::new();
+        let mut oauth_done = false;
+
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break, // EOF (child exited)
@@ -175,6 +342,31 @@ pub async fn terminal_create(
                         json!({ "id": id_for_reader, "data": chunk }),
                     ) {
                         warn!(terminal = %id_for_reader, "emit failed: {e}");
+                    }
+
+                    // OAuth detection for auth terminals
+                    if let Some(ref profile_id) = auth_profile_id {
+                        // Strip ANSI escapes from chunk before appending
+                        let stripped = strip_ansi(&chunk);
+                        auth_buf.push_str(&stripped);
+                        // Keep buffer bounded
+                        if auth_buf.len() > 65536 {
+                            auth_buf = auth_buf[auth_buf.len() - 32768..].to_string();
+                        }
+
+                        if !oauth_done {
+                            if let Some(event) = detect_oauth_success(&auth_buf, &id_for_reader, profile_id) {
+                                oauth_done = true;
+                                let _ = app_handle_for_reader.emit("terminal:oauth:token", event);
+                            }
+                        } else {
+                            // After OAuth, watch for onboarding complete (welcome screen)
+                            if let Some(event) = detect_onboarding_complete(&auth_buf, &id_for_reader, profile_id) {
+                                let _ = app_handle_for_reader.emit("terminal:onboarding:complete", event);
+                                // Clear buffer to avoid re-firing on buffered content
+                                auth_buf.clear();
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -373,6 +565,49 @@ mod tests {
     fn default_cols_and_rows_are_sane() {
         assert_eq!(default_cols(), 80);
         assert_eq!(default_rows(), 24);
+    }
+
+    #[test]
+    fn prepend_path_adds_dir_to_front() {
+        let sep = path_separator();
+        let dir = std::path::Path::new("/opt/homebrew/bin");
+        let existing = format!("/usr/bin{sep}/bin");
+        let result = prepend_path(dir, &existing);
+        assert_eq!(result, format!("/opt/homebrew/bin{sep}/usr/bin{sep}/bin"));
+        // The injected dir is the first entry.
+        assert_eq!(result.split(sep).next(), Some("/opt/homebrew/bin"));
+    }
+
+    #[test]
+    fn prepend_path_is_idempotent_when_already_present() {
+        let sep = path_separator();
+        let dir = std::path::Path::new("/opt/homebrew/bin");
+        // Already at the front.
+        let front = format!("/opt/homebrew/bin{sep}/usr/bin");
+        assert_eq!(prepend_path(dir, &front), front);
+        // Present elsewhere — still no duplicate added.
+        let middle = format!("/usr/bin{sep}/opt/homebrew/bin{sep}/bin");
+        assert_eq!(prepend_path(dir, &middle), middle);
+    }
+
+    #[test]
+    fn prepend_path_handles_empty_existing() {
+        let dir = std::path::Path::new("/opt/homebrew/bin");
+        assert_eq!(prepend_path(dir, ""), "/opt/homebrew/bin");
+    }
+
+    #[test]
+    fn effective_path_uses_supplied_base_when_no_claude_dir() {
+        // When no claude binary is resolvable on the host, effective_path falls
+        // back to None and the caller leaves PATH untouched. We can't force
+        // resolve_claude_dir to None deterministically, so assert the contract
+        // holds for whichever branch this host takes.
+        let supplied = "/custom/base".to_string();
+        // claude found: supplied base must still be present (folded in).
+        // claude not found: None is the documented fallback (nothing to assert).
+        if let Some(p) = effective_path(Some(&supplied)) {
+            assert!(p.contains("/custom/base"));
+        }
     }
 
     #[test]

@@ -15,8 +15,23 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
-pub type RoadmapProcess = Arc<Mutex<Option<std::process::Child>>>;
-pub type RoadmapRunning = Arc<Mutex<bool>>;
+pub struct RoadmapProcess(Arc<Mutex<Option<std::process::Child>>>);
+impl std::ops::Deref for RoadmapProcess {
+    type Target = Arc<Mutex<Option<std::process::Child>>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Default for RoadmapProcess {
+    fn default() -> Self { Self(Arc::new(Mutex::new(None))) }
+}
+
+pub struct RoadmapRunning(Arc<Mutex<bool>>);
+impl std::ops::Deref for RoadmapRunning {
+    type Target = Arc<Mutex<bool>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Default for RoadmapRunning {
+    fn default() -> Self { Self(Arc::new(Mutex::new(false))) }
+}
 
 const AUTO_CLAUDE_SUBDIR: &str = ".auto-claude";
 const ROADMAP_FILENAME: &str = "roadmap.json";

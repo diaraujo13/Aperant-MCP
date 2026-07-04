@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight, ExternalLink, Lightbulb, Loader2, Play, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { SpeakButton } from '../ui/speak-button';
 import {
   IDEATION_TYPE_LABELS,
   IDEATION_TYPE_COLORS,
@@ -57,6 +58,7 @@ export function IdeaDetailPanel({ idea, onClose, onConvert, onGoToTask, onDismis
             </div>
             <h2 className="font-semibold">{idea.title}</h2>
           </div>
+          <SpeakButton text={`${idea.title}. ${idea.description}. ${idea.rationale}`} />
           <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('accessibility.closePanelAriaLabel')}>
             <ChevronRight className="h-4 w-4" />
           </Button>

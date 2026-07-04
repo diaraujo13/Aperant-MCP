@@ -16,7 +16,14 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
-pub type ChangelogProcess = Arc<Mutex<Option<std::process::Child>>>;
+pub struct ChangelogProcess(Arc<Mutex<Option<std::process::Child>>>);
+impl std::ops::Deref for ChangelogProcess {
+    type Target = Arc<Mutex<Option<std::process::Child>>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Default for ChangelogProcess {
+    fn default() -> Self { Self(Arc::new(Mutex::new(None))) }
+}
 
 const SPECS_SUBDIR: &str = ".auto-claude/specs";
 const PLAN_FILENAME: &str = "implementation_plan.json";

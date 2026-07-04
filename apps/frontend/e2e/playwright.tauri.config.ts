@@ -27,6 +27,9 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Escape hatch for machines where the bundled Chromium download is
+    // unavailable: PW_CHANNEL=chrome runs against the system browser.
+    ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
   },
   webServer: {
     // Build the renderer first, then serve it.

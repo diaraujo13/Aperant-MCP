@@ -1,6 +1,6 @@
 [package]
 name = "auto-claude-tauri"
-version = "0.2.1-0"
+version = "0.2.2-0"
 edition = "2021"
 description = "Tauri 2 shell for Aperant-MCP / Auto-Claude (migration from Electron)"
 license = "AGPL-3.0"
@@ -24,6 +24,7 @@ portable-pty = "0.8"
 notify = "6"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 base64 = "0.22"
+regex-lite = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1.40", features = ["sync", "macros", "rt", "test-util"] }

@@ -1010,6 +1010,12 @@ export interface ElectronAPI {
   installClaudeCodeVersion: (version: string) => Promise<IPCResult<{ command: string; version: string }>>;
   getClaudeCodeInstallations: () => Promise<IPCResult<import('./cli').ClaudeInstallationList>>;
   setClaudeCodeActivePath: (cliPath: string) => Promise<IPCResult<{ path: string }>>;
+  /**
+   * Fast, network-free resolution of the local `claude` binary path.
+   * Optional: implemented only by the Tauri shim — undefined in the Electron
+   * preload, so call sites must use `?.()`.
+   */
+  resolveClaudeCodePath?: () => Promise<IPCResult<{ path: string | null; source: string | null }>>;
 
   // Debug operations
   getDebugInfo: () => Promise<{

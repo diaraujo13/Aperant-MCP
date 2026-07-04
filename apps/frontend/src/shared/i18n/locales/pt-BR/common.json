@@ -783,5 +783,9 @@
       "blockedTooltip": "This PR cannot be merged due to blocking conditions",
       "conflictTooltip": "This PR has merge conflicts that need to be resolved"
     }
+  },
+  "tts": {
+    "speak": "Ler em voz alta",
+    "stop": "Parar leitura"
   }
 }
